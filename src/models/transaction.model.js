@@ -11,7 +11,8 @@ const transactionSchema = new mongoose.Schema({
   },
   accountNumber: { 
     type: String, 
-    required: true 
+    required: true,
+    index: true  // Add index here
   },
   subAccount: String,
   code: String,
@@ -22,7 +23,8 @@ const transactionSchema = new mongoose.Schema({
   },
   description: { 
     type: String,
-    required: true 
+    required: true,
+    index: true  // Add index here
   },
   transferAmount: { 
     type: Number, 
@@ -30,20 +32,28 @@ const transactionSchema = new mongoose.Schema({
   },
   referenceCode: { 
     type: String, 
-    required: true 
+    required: true,
+    index: true  // Add index here
   },
   accumulated: Number,
   status: {
     type: String,
     enum: ['pending', 'received', 'processing', 'completed', 'success', 'failed', 'rejected'],
-    default: 'received'
+    default: 'received',
+    index: true  // Add index here
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true  // Add index here
   }
 });
 
-// Fixed: Changed model name from 'User' to 'Transaction'
+// Add text index for searching descriptions
+transactionSchema.index({ description: 'text', content: 'text' });
+
+// Add compound index for common query patterns
+transactionSchema.index({ gateway: 1, transactionDate: -1 });
+
 const Transaction = mongoose.model('Transaction', transactionSchema);
 module.exports = Transaction;
