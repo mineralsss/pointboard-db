@@ -100,6 +100,48 @@ app.post("/api/transaction", (req, res) => {
   }
 });
 
+// Backend endpoint for checking transaction status
+app.get('/api/transactions/:transactionId/status', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    
+    console.log(`[STATUS] Checking transaction status for ID: ${transactionId}`);
+    
+    // Query your MongoDB collection for the transaction
+    const transaction = await db.collection('transactions').findOne({ 
+      referenceCode: transactionId 
+      // or use { _id: new ObjectId(transactionId) } if you're using MongoDB's _id
+    });
+    
+    if (!transaction) {
+      console.log(`[STATUS] Transaction ${transactionId} not found`);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Transaction not found' 
+      });
+    }
+    
+    // Return the transaction status with appropriate data
+    return res.status(200).json({
+      success: true,
+      status: transaction.status || 'pending', // Default to pending if status field doesn't exist
+      transactionId: transactionId,
+      amount: transaction.transferAmount,
+      timestamp: transaction.transactionDate,
+      gateway: transaction.gateway,
+      // Include any other relevant transaction data
+    });
+    
+  } catch (error) {
+    console.error('[STATUS] Error fetching transaction status:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching transaction status', 
+      error: error.message 
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -160,7 +202,33 @@ function setupWebhookServer() {
     req.on("end", async () => {
       try {
         console.log("[WEBHOOK] Received payload:", body);
-        const paymentData = JSON.parse(body);
+        
+        // Check if body is empty
+        if (!body || body.trim() === '') {
+          console.warn("[WEBHOOK] Empty payload received");
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ 
+            success: false, 
+            message: "Empty payload received" 
+          }));
+          return;
+        }
+        
+        // Try to parse the JSON with additional error handling
+        let paymentData;
+        try {
+          paymentData = JSON.parse(body);
+        } catch (parseError) {
+          console.error("[WEBHOOK] JSON parsing error:", parseError);
+          console.error("[WEBHOOK] Raw payload:", body);
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            success: false,
+            message: "Invalid JSON format",
+            error: parseError.message
+          }));
+          return;
+        }
 
         // Save transaction record
         const transaction = new Transaction({
