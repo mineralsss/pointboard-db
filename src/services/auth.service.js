@@ -83,10 +83,12 @@ class AuthService {
           };
         }
         
+        // Replace generic message with phone number specific message
+        // This assumes most duplicates are likely phone numbers if not caught above
         return {
           success: false,
-          errorType: 'duplicate_field',
-          message: 'A duplicate field was detected'
+          errorType: 'duplicate_phone',
+          message: 'This phone number is already registered'
         };
       }
       
