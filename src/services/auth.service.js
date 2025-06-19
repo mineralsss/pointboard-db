@@ -14,7 +14,14 @@ const emailTemplates = require('../utils/emailTemplates');
 class AuthService {
   register = async (userData) => {
     try {
-      // Check if email already exists
+      // Split name into firstName and lastName if only name is provided
+      if (userData.name && (!userData.firstName || !userData.lastName)) {
+        const nameParts = userData.name.trim().split(' ');
+        userData.firstName = nameParts[0];
+        userData.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      }
+      
+      // Check for duplicate email
       const existingEmail = await User.findOne({ email: userData.email });
       if (existingEmail) {
         return {
@@ -86,6 +93,23 @@ class AuthService {
           success: false,
           errorType: 'duplicate_field',
           message: 'A duplicate field was detected'
+        };
+      }
+      
+      // Handle validation errors
+      if (error.name === 'ValidationError') {
+        const validationErrors = {};
+        
+        // Extract validation error messages
+        Object.keys(error.errors).forEach(field => {
+          validationErrors[field] = error.errors[field].message;
+        });
+        
+        return {
+          success: false,
+          errorType: 'validation_error',
+          message: 'Validation failed',
+          errors: validationErrors
         };
       }
       

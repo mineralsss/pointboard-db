@@ -4,17 +4,45 @@ const catchAsync = require("../utils/catchAsync");
 
 class AuthController {
   register = catchAsync(async (req, res) => {
-    const result = await authService.register(req.body);
+    try {
+      const result = await authService.register(req.body);
 
-    if (!result.success) {
-      return res.status(400).json({
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          errorType: result.errorType,
+          message: result.message,
+        });
+      }
+
+      return CREATED(res, "User registered successfully", result);
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      // Handle MongoDB duplicate key error
+      if (error.code === 11000) {
+        const field = Object.keys(error.keyPattern)[0];
+        const errorMsg =
+          field === "email"
+            ? "This email address is already registered"
+            : field === "phoneNumber"
+            ? "This phone number is already registered"
+            : `${field} already exists`;
+
+        return res.status(400).json({
+          success: false,
+          errorType: `duplicate_${field}`,
+          message: errorMsg,
+        });
+      }
+
+      // For any other error, return 500
+      return res.status(500).json({
         success: false,
-        errorType: result.errorType,
-        message: result.message,
+        errorType: "server_error",
+        message: "An unexpected error occurred. Please try again later.",
       });
     }
-
-    return CREATED(res, "User registered successfully", result);
   });
 
   login = catchAsync(async (req, res) => {
