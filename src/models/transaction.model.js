@@ -1,4 +1,4 @@
-const {mongoose, model} = require('mongoose');
+const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
   gateway: { 
@@ -43,5 +43,7 @@ const transactionSchema = new mongoose.Schema({
     default: Date.now
   }
 });
-const User = model('Transaction', transactionSchema);
-module.exports = User;
+
+// Fixed: Changed model name from 'User' to 'Transaction'
+const Transaction = mongoose.model('Transaction', transactionSchema);
+module.exports = Transaction;
