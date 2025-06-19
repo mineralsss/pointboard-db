@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
 const http = require("http");
+const Transaction = require('./models/transaction.model');
 
 const app = express();
 
@@ -107,8 +108,8 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
     
     console.log(`[STATUS] Checking transaction status for ID: ${transactionId}`);
     
-    // Query your MongoDB collection for the transaction
-    const transaction = await db.collection('transactions').findOne({ 
+    // Use the Mongoose model instead of raw db
+    const transaction = await Transaction.findOne({ 
       referenceCode: transactionId 
     });
     
@@ -120,23 +121,23 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
       });
     }
     
-    // Check if the transaction ID is contained within the description text
+    // Check both content and description fields
     let status = transaction.status || 'pending';
+    const content = transaction.content || '';
     const description = transaction.description || '';
     
-    // If the description contains the transaction ID as part of its text
-    if (description.includes(transactionId)) {
+    // If either field contains the transaction ID, mark as successful
+    if (content.includes(transactionId) || description.includes(transactionId)) {
       status = 'succeeded';
-      console.log(`[STATUS] Transaction ID found in description: "${description}"`);
+      console.log(`[STATUS] Transaction ID found in text: "${content || description}"`);
     }
     
     return res.status(200).json({
       success: true,
       status: status,
       transactionId: transactionId,
-      amount: transaction.transferAmount,
-      timestamp: transaction.transactionDate,
-      gateway: transaction.gateway,
+      amount: transaction.amount,
+      content: transaction.content,
       description: transaction.description
     });
     
