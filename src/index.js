@@ -110,7 +110,6 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
     // Query your MongoDB collection for the transaction
     const transaction = await db.collection('transactions').findOne({ 
       referenceCode: transactionId 
-      // or use { _id: new ObjectId(transactionId) } if you're using MongoDB's _id
     });
     
     if (!transaction) {
@@ -121,15 +120,24 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
       });
     }
     
-    // Return the transaction status with appropriate data
+    // Check if the transaction ID is contained within the description text
+    let status = transaction.status || 'pending';
+    const description = transaction.description || '';
+    
+    // If the description contains the transaction ID as part of its text
+    if (description.includes(transactionId)) {
+      status = 'succeeded';
+      console.log(`[STATUS] Transaction ID found in description: "${description}"`);
+    }
+    
     return res.status(200).json({
       success: true,
-      status: transaction.status || 'pending', // Default to pending if status field doesn't exist
+      status: status,
       transactionId: transactionId,
       amount: transaction.transferAmount,
       timestamp: transaction.transactionDate,
       gateway: transaction.gateway,
-      // Include any other relevant transaction data
+      description: transaction.description
     });
     
   } catch (error) {
