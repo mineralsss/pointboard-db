@@ -6,6 +6,7 @@ const _ = require("lodash");
 const bcrypt = require("bcryptjs");
 const { verifyJwt } = require("../utils/token");
 const config = require("../configs/app.config");
+const userEvents = require('../events/userEvents');
 class AuthService {
   register = async ({
     email,
@@ -33,6 +34,9 @@ class AuthService {
       dob,
       isVerified: true, // Auto-verify for now
     });
+    
+    // Emit event after successful registration
+    userEvents.emit('user:registered', user);
 
     return {
       message: "User registered successfully.",
