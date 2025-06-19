@@ -7,7 +7,6 @@ const mongoose = require("mongoose");
 const http = require("http");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
 mongoose
@@ -34,6 +33,71 @@ app.use("/api/v1", require("./routes/index"));
 
 app.get("/", (req, res) => {
   res.json({ message: "Server is running!" });
+});
+
+// Sample POST endpoint
+app.post("/api/data", (req, res) => {
+  try {
+    // Process your data here
+    console.log("Received data:", req.body);
+
+    // Return success status code
+    return res.status(200).json({
+      success: true,
+      message: "Data successfully processed",
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+// POST endpoint to handle bank transactions
+app.post("/api/transaction", (req, res) => {
+  try {
+    const transaction = req.body;
+
+    // Log the received transaction data
+    console.log("Received transaction:", transaction);
+
+    // Validate that required fields exist
+    const requiredFields = [
+      "gateway",
+      "transactionDate",
+      "accountNumber",
+      "transferType",
+      "transferAmount",
+      "referenceCode",
+    ];
+
+    for (const field of requiredFields) {
+      if (!transaction[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
+      }
+    }
+
+    // Process the transaction here
+    // For example, save to MongoDB or perform other operations
+
+    // Return success status code
+    return res.status(200).json({
+      success: true,
+      message: "Transaction processed successfully",
+    });
+  } catch (error) {
+    console.error("Error processing transaction:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
 });
 
 // Error handling middleware
@@ -152,9 +216,11 @@ function setupWebhookServer() {
 // ---- START YOUR MAIN APP AND WEBHOOK SERVER TOGETHER ----
 
 // Your existing Express app setup
-// Start your Express app as usual
-const server = app.listen(PORT, () => {
-  console.log(`[APP] Main server running on port ${PORT}`);
+// Set the port for Heroku or use 3000 for local development
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 // Start the webhook server in the same process
