@@ -114,3 +114,52 @@ exports.register = async (req, res) => {
     });
   }
 };
+
+/**
+ * Generates HTML content for password reset email
+ * @param {string} name - User's name
+ * @param {string} resetUrl - Password reset URL
+ * @returns {string} - HTML email content
+ */
+exports.passwordResetEmail = (name, resetUrl) => {
+  // Extract first name or use full name
+  const firstName = name ? name.split(' ')[0] : 'there';
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
+    .header { background-color: #3498db; color: white; padding: 15px; text-align: center; }
+    .content { padding: 20px; }
+    .button { display: inline-block; background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
+    .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
+    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Reset Your Password</h1>
+    </div>
+    <div class="content">
+      <h2>Hello ${firstName}!</h2>
+      <p>We received a request to reset your password for your PointBoard account.</p>
+      <p>Click the button below to reset your password:</p>
+      <p style="text-align: center;">
+        <a href="${resetUrl}" class="button">Reset Password</a>
+      </p>
+      <div class="note">
+        <p>This link is valid for 1 hour. If you didn't request this password reset, please ignore this email or contact support if you have concerns.</p>
+      </div>
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+};

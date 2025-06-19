@@ -26,8 +26,27 @@ const refreshTokens = {
   }),
 };
 
+const forgotPassword = {
+  body: Joi.object().keys({
+    email: Joi.string().email().required(),
+  }),
+};
+
+const resetPassword = {
+  body: Joi.object().keys({
+    token: Joi.string().required(),
+    password: Joi.string().min(8).required(),
+    confirmPassword: Joi.string()
+      .valid(Joi.ref("password"))
+      .required()
+      .messages({ "any.only": "Passwords do not match" }),
+  }),
+};
+
 module.exports = {
   register,
   login,
   refreshTokens,
+  forgotPassword,
+  resetPassword,
 };

@@ -46,10 +46,18 @@ const subscribeValidation = {
   }),
 };
 
+const resetPasswordValidation = {
+  body: Joi.object().keys({
+    resetPasswordToken: Joi.string().required(),
+    newPassword: Joi.string().required().min(8),
+  }),
+};
+
 module.exports = {
   changePassword,
   changeProfile,
   updateUserData,
   changeActiveStatus,
   subscribeValidation,
+  resetPasswordValidation,
 };
