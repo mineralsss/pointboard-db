@@ -105,40 +105,44 @@ app.post("/api/transaction", (req, res) => {
 app.get('/api/transactions/:transactionId/status', async (req, res) => {
   try {
     const { transactionId } = req.params;
+    const orderIdPattern = transactionId.match(/PointBoardORDER(\d+)/)?.[1];
     
-    console.log(`[STATUS] Checking transaction status for ID: ${transactionId}`);
+    if (!orderIdPattern) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transaction ID format'
+      });
+    }
     
-    // Use the Mongoose model instead of raw db
-    const transaction = await Transaction.findOne({ 
-      referenceCode: transactionId 
+    console.log(`[STATUS] Checking for order ID pattern: PointBoardORDER${orderIdPattern}`);
+    
+    // Find all transactions that might contain this order ID in their description
+    const transactions = await Transaction.find({});
+    
+    // Filter transactions to find one with matching order pattern in description
+    const matchingTransaction = transactions.find(transaction => {
+      const description = transaction.description || '';
+      return description.includes(`PointBoardORDER${orderIdPattern}`);
     });
     
-    if (!transaction) {
-      console.log(`[STATUS] Transaction ${transactionId} not found`);
+    if (!matchingTransaction) {
+      console.log(`[STATUS] No transaction found with order pattern: PointBoardORDER${orderIdPattern}`);
       return res.status(404).json({ 
         success: false, 
         message: 'Transaction not found' 
       });
     }
     
-    // Check both content and description fields
-    let status = transaction.status || 'pending';
-    const content = transaction.content || '';
-    const description = transaction.description || '';
-    
-    // If either field contains the transaction ID, mark as successful
-    if (content.includes(transactionId) || description.includes(transactionId)) {
-      status = 'succeeded';
-      console.log(`[STATUS] Transaction ID found in text: "${content || description}"`);
-    }
+    console.log(`[STATUS] Found matching transaction: ${matchingTransaction._id}`);
     
     return res.status(200).json({
       success: true,
-      status: status,
+      status: 'succeeded', // Since we found a match, consider it successful
       transactionId: transactionId,
-      amount: transaction.amount,
-      content: transaction.content,
-      description: transaction.description
+      amount: matchingTransaction.transferAmount,
+      timestamp: matchingTransaction.transactionDate,
+      gateway: matchingTransaction.gateway,
+      description: matchingTransaction.description
     });
     
   } catch (error) {
