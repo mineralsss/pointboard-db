@@ -4,6 +4,9 @@
  * @returns {string} - HTML email content
  */
 exports.welcomeEmail = (name) => {
+  // Extract first name or use full name if splitting isn't possible
+  const firstName = name ? name.split(' ')[0] : 'there';
+  
   return `
 <!DOCTYPE html>
 <html>
@@ -22,7 +25,7 @@ exports.welcomeEmail = (name) => {
       <h1>Welcome to PointBoard!</h1>
     </div>
     <div class="content">
-      <h2>Hello ${name}!</h2>
+      <h2>Hello ${firstName}!</h2>
       <p>Thank you for registering with PointBoard. We're excited to have you with us!</p>
       <p>Your account has been created successfully and you can now start using our services.</p>
       <p>If you have any questions, feel free to contact our support team.</p>
