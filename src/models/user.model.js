@@ -1,55 +1,70 @@
 const { Schema, model } = require("mongoose");
+const role = require("../configs/role.config");
 const bcrypt = require("bcryptjs");
-const roles = require("../configs/role.config");
-
 const userSchema = new Schema(
   {
     firstName: {
       type: String,
-      required: [true, "First name is required"],
+      required: true,
       trim: true,
     },
     lastName: {
       type: String,
-      required: [true, "Last name is required"],
+      required: true,
       trim: true,
     },
     email: {
       type: String,
-      required: [true, "Email is required"],
+      required: true,
       unique: true,
-      lowercase: true,
       trim: true,
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: 8,
-      select: false, // Don't return password by default in queries
     },
     phone: {
       type: String,
       unique: true,
-      sparse: true, // Only enforce uniqueness if field exists
+      trim: true,
+    },
+    address: {
+      type: String,
+      trim: true,
+    },
+    dob: {
+      type: Date,
+    },
+    avatar: {
+      type: String,
+      default:
+        "https://www.strasys.uk/wp-content/uploads/2022/02/Depositphotos_484354208_S.jpg",
+    },
+    balance: {
+      type: Number,
+      default: 10000000,
+    },
+    certificate: {
+      type: [String],
+      default: [],
+    },
+    password: {
+      type: String,
+      required: true,
+      trim: true,
+      minLength: 8,
+      private: true, // used by the toJSON plugin
     },
     role: {
       type: String,
-      enum: Object.values(roles),
-      default: roles.USER,
+      enum: Object.values(role),
+      default: role.STUDENT,
+      trim: true,
+      lowercase: true,
     },
     isVerified: {
       type: Boolean,
       default: false,
     },
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {
@@ -57,23 +72,16 @@ const userSchema = new Schema(
   }
 );
 
-// Pre-save hook to hash password
-userSchema.pre("save", async function (next) {
-  // Only hash the password if it's modified or new
-  if (!this.isModified("password")) return next();
+userSchema.plugin(require("./plugins/toJSON.plugin"));
+userSchema.plugin(require("./plugins/paginate.plugin"));
 
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
+userSchema.pre("save", async function (next) {
+  const user = this;
+  if (user.isModified("password")) {
+    user.password = await bcrypt.hash(user.password, 8);
   }
+  next();
 });
 
-// Method to compare password
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-
-module.exports = model("User", userSchema);
+const User = model("User", userSchema);
+module.exports = User;
