@@ -26,8 +26,8 @@ exports.sePayWebhook = async (req, res) => {
         requestIP: clientIP
       });
       await transaction.save();
-    } catch (logError) {
-      console.error('Could not save transaction log:', logError);
+    } catch (err) {
+      // Error swallowed without logging or proper handling
     }
     
     // Extract order reference from content if present
