@@ -18,32 +18,16 @@ class AuthService {
       const userToCreate = {
         email: userData.email,
         password: await bcrypt.hash(userData.password, 10),
-        phoneNumber: userData.phoneNumber
+        phoneNumber: userData.phoneNumber,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        role: userData.role,
+        address: userData.address,
+        dob: userData.dob,
+        isVerified: true, // Auto-verify for now
       };
 
-      // Handle name field mapping
-      if (userData.firstName && userData.lastName) {
-        // If frontend sends both fields directly
-        userToCreate.firstName = userData.firstName;
-        userToCreate.lastName = userData.lastName;
-      } else if (userData.name) {
-        // If frontend sends combined name, split it
-        const nameParts = userData.name.trim().split(' ');
-        userToCreate.firstName = nameParts[0];
-        userToCreate.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '-';
-      } else {
-        // Neither format provided
-        return {
-          success: false,
-          errorType: 'validation_error',
-          message: 'Name is required',
-          errors: {
-            name: 'Please provide your name'
-          }
-        };
-      }
-
-      // Create user with properly mapped fields
+      // Create user with all required fields
       const user = await User.create(userToCreate);
       
       // Generate auth tokens
@@ -114,23 +98,29 @@ class AuthService {
   };
 
   loginWithEmail = async ({ email, password }) => {
+    // Find user by email
     const user = await userRepo.getByEmail(email);
     if (!user) {
       throw new APIError(400, "Email does not exist");
     }
 
+    // Check password
     const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) {
       throw new APIError(400, "Email or password is incorrect");
     }
 
+    // Verify account is active
     if (!user.isActive) {
       throw new APIError(400, "Your account has been blocked");
     }
 
+    // Generate tokens
     const tokens = await createTokenPair({
       userID: user._id,
     });
+    
+    // Return tokens and user data
     return {
       ...tokens,
       userData: _.pick(user, [

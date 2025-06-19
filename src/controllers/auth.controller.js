@@ -121,11 +121,25 @@ class AuthController {
   });
 
   login = catchAsync(async (req, res) => {
-    return OK(
-      res,
-      "Login successful",
-      await authService.loginWithEmail(req.body)
-    );
+    try {
+      const result = await authService.loginWithEmail(req.body);
+      return OK(res, "Login successful", result);
+    } catch (error) {
+      console.error("Login error:", error);
+      
+      if (error instanceof APIError) {
+        return res.status(error.statusCode || 400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
+        errorType: 'server_error',
+        message: 'An unexpected error occurred. Please try again later.'
+      });
+    }
   });
 
   refreshTokens = catchAsync(async (req, res) => {
