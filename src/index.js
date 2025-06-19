@@ -155,6 +155,74 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
   }
 });
 
+// Add this endpoint to your Express app in index.js or routes file
+
+/**
+ * Endpoint to verify if a transaction exists and check its status
+ */
+app.get('/api/transactions/verify/:transactionId', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    
+    console.log(`[VERIFY] Checking transaction: ${transactionId}`);
+    
+    // First try direct match with the ID as provided
+    let transaction = await Transaction.findOne({ 
+      referenceCode: transactionId 
+    });
+    
+    // If not found, try matching patterns within description field
+    if (!transaction) {
+      // Extract just the numeric part from PointBoard{NUMBER}
+      const numericId = transactionId.replace(/\D/g, '');
+      
+      // Try to find any transactions with this numeric ID in description
+      // This will match both PointBoard{NUMBER} and PointBoardORDER{NUMBER} patterns
+      if (numericId) {
+        transaction = await Transaction.findOne({
+          description: { $regex: numericId, $options: 'i' }
+        });
+      }
+      
+      // If still not found, try partial text search for the whole ID
+      if (!transaction) {
+        transaction = await Transaction.findOne({
+          description: { $regex: transactionId.substring(0, 10), $options: 'i' }
+        });
+      }
+    }
+    
+    if (!transaction) {
+      console.log(`[VERIFY] No transaction found for: ${transactionId}`);
+      return res.status(200).json({
+        exists: false,
+        status: 'not_found'
+      });
+    }
+    
+    console.log(`[VERIFY] Found transaction ${transaction._id}`);
+    console.log(`[VERIFY] Description: ${transaction.description}`);
+    
+    return res.status(200).json({
+      exists: true,
+      status: 'success', // Since we found a match, consider it successful
+      amount: transaction.transferAmount,
+      timestamp: transaction.transactionDate,
+      transactionId: transaction.referenceCode || transaction._id,
+      description: transaction.description
+    });
+    
+  } catch (error) {
+    console.error('[VERIFY] Error verifying transaction:', error);
+    return res.status(500).json({
+      exists: false,
+      status: 'error',
+      message: 'Error verifying transaction',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
