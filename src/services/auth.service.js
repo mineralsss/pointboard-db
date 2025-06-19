@@ -14,43 +14,37 @@ const emailTemplates = require('../utils/emailTemplates');
 class AuthService {
   register = async (userData) => {
     try {
-      // Split name into firstName and lastName if only name is provided
-      if (userData.name && (!userData.firstName || !userData.lastName)) {
-        const nameParts = userData.name.trim().split(' ');
-        userData.firstName = nameParts[0];
-        userData.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-      }
-      
-      // Check for duplicate email
-      const existingEmail = await User.findOne({ email: userData.email });
-      if (existingEmail) {
-        return {
-          success: false,
-          errorType: 'duplicate_email',
-          message: 'This email address is already registered'
-        };
-      }
-      
-      // Check if phone number already exists (if applicable)
-      if (userData.phoneNumber) {
-        const existingPhone = await User.findOne({ phoneNumber: userData.phoneNumber });
-        if (existingPhone) {
-          return {
-            success: false,
-            errorType: 'duplicate_phone',
-            message: 'This phone number is already registered'
-          };
-        }
-      }
-      
-      // Create user
-      const user = await User.create({
-        name: userData.name,
+      // Prepare user data
+      const userToCreate = {
         email: userData.email,
         password: await bcrypt.hash(userData.password, 10),
-        phoneNumber: userData.phoneNumber,
-        // other fields...
-      });
+        phoneNumber: userData.phoneNumber
+      };
+
+      // Handle name field mapping
+      if (userData.firstName && userData.lastName) {
+        // If frontend sends both fields directly
+        userToCreate.firstName = userData.firstName;
+        userToCreate.lastName = userData.lastName;
+      } else if (userData.name) {
+        // If frontend sends combined name, split it
+        const nameParts = userData.name.trim().split(' ');
+        userToCreate.firstName = nameParts[0];
+        userToCreate.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '-';
+      } else {
+        // Neither format provided
+        return {
+          success: false,
+          errorType: 'validation_error',
+          message: 'Name is required',
+          errors: {
+            name: 'Please provide your name'
+          }
+        };
+      }
+
+      // Create user with properly mapped fields
+      const user = await User.create(userToCreate);
       
       // Generate auth tokens
       const tokens = this.generateAuthTokens(user);
@@ -98,18 +92,18 @@ class AuthService {
       
       // Handle validation errors
       if (error.name === 'ValidationError') {
-        const validationErrors = {};
+        console.log('Validation error details:', error.errors);
         
-        // Extract validation error messages
-        Object.keys(error.errors).forEach(field => {
-          validationErrors[field] = error.errors[field].message;
-        });
-        
+        // Return user-friendly error messages
         return {
           success: false,
           errorType: 'validation_error',
-          message: 'Validation failed',
-          errors: validationErrors
+          message: 'Please check your registration details',
+          errors: Object.fromEntries(
+            Object.entries(error.errors).map(([field, err]) => 
+              [field, err.message.replace('Path', 'Field')]
+            )
+          )
         };
       }
       
