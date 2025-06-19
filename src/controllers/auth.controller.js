@@ -5,7 +5,39 @@ const userEvents = require('../events/userEvents');
 
 class AuthController {
   register = catchAsync(async (req, res) => {
-    const user = await authService.register(req.body);
+    // Extract data properly
+    const { name, email, password } = req.body;
+    
+    // Validate email is present
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+    
+    // Create user (your existing code)
+    const user = await User.create({
+      name, 
+      email,
+      password
+      // other fields...
+    });
+    
+    // Send welcome email with proper logging
+    try {
+      console.log(`Attempting to send welcome email to: ${email}`);
+      
+      await emailService.sendEmail(
+        email, // Make sure email is defined
+        'Welcome to PointBoard!',
+        emailTemplates.welcomeEmail(name || 'Valued Customer')
+      );
+      
+      console.log(`Welcome email successfully sent to: ${email}`);
+    } catch (emailError) {
+      console.error(`Failed to send welcome email to ${email}:`, emailError);
+    }
     
     // Emit event after successful registration
     userEvents.emit('user:registered', user);
