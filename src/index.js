@@ -284,72 +284,51 @@ function setupWebhookServer() {
       try {
         console.log("[WEBHOOK] Received payload:", body);
         
-        // Check if body is empty
-        if (!body || body.trim() === '') {
-          console.warn("[WEBHOOK] Empty payload received");
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ 
-            success: false, 
-            message: "Empty payload received" 
-          }));
-          return;
-        }
+        // Parse the JSON data
+        const paymentData = JSON.parse(body);
         
-        // Try to parse the JSON with additional error handling
-        let paymentData;
-        try {
-          paymentData = JSON.parse(body);
-        } catch (parseError) {
-          console.error("[WEBHOOK] JSON parsing error:", parseError);
-          console.error("[WEBHOOK] Raw payload:", body);
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({
-            success: false,
-            message: "Invalid JSON format",
-            error: parseError.message
-          }));
-          return;
-        }
-
-        // Save transaction record
+        // Log the incoming data for debugging
+        console.log("[WEBHOOK] Processing payment data:", JSON.stringify(paymentData, null, 2));
+        
+        // Create and save transaction document
         const transaction = new Transaction({
-          transactionId: paymentData.id || null,
-          gateway: paymentData.gateway || "unknown",
-          amount: paymentData.transferAmount || 0,
-          content: paymentData.content || "",
-          referenceCode: paymentData.referenceCode || null,
-          status: "received",
-          rawData: paymentData,
-          requestIP: clientIP,
+          gateway: paymentData.gateway,
+          transactionDate: paymentData.transactionDate,
+          accountNumber: paymentData.accountNumber,
+          subAccount: paymentData.subAccount,
+          code: paymentData.code,
+          content: paymentData.content,
+          transferType: paymentData.transferType,
+          description: paymentData.description, // Make sure this field is saved
+          transferAmount: paymentData.transferAmount,
+          referenceCode: paymentData.referenceCode,
+          accumulated: paymentData.accumulated || 0,
+          status: 'received' // Initial status
         });
-
-        // Extract order reference if available
-        if (paymentData.content) {
-          const orderRefMatch = paymentData.content.match(
-            /PointBoard-?([A-Z0-9]+)/i
-          );
-          if (orderRefMatch) {
-            transaction.orderRef = orderRefMatch[1];
-          }
-        }
-
+        
+        // Save the transaction
         await transaction.save();
-        console.log("[WEBHOOK] Transaction saved:", transaction._id);
-
-        // Return success response
+        
+        console.log("[WEBHOOK] Transaction saved successfully:", {
+          id: transaction._id,
+          ref: transaction.referenceCode,
+          description: transaction.description // Log to confirm it's saved
+        });
+        
+        // Respond with success
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            success: true,
-            message: "Payment notification received",
-          })
-        );
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: "Transaction processed successfully" 
+        }));
       } catch (error) {
-        console.error("[WEBHOOK] Processing error:", error);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({ success: true, message: "Error processing webhook" })
-        );
+        console.error("[WEBHOOK] Error processing webhook:", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ 
+          success: false, 
+          message: "Error processing webhook", 
+          error: error.message 
+        }));
       }
     });
   });
