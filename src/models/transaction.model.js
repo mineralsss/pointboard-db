@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const {mongoose, model} = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
   gateway: { 
@@ -43,5 +43,5 @@ const transactionSchema = new mongoose.Schema({
     default: Date.now
   }
 });
-
-module.exports = mongoose.model('Transaction', transactionSchema);
+const User = model('Transaction', transactionSchema);
+module.exports = User;
