@@ -13,21 +13,28 @@ exports.sePayWebhook = async (req, res) => {
     console.log(`Received webhook from IP: ${clientIP}`);
     console.log('Request body:', JSON.stringify(req.body));
     
-    let transaction;
     try {
-      transaction = new Transaction({
-        transactionId: req.body.id || null,
+      // Create transaction with fields matching the schema
+      const transaction = new Transaction({
         gateway: req.body.gateway || 'unknown',
-        amount: req.body.transferAmount || 0,
+        transactionDate: req.body.transactionDate || new Date().toISOString(),
+        accountNumber: req.body.accountNumber || 'unknown',
+        subAccount: req.body.subAccount || null,
+        code: req.body.code || null,
         content: req.body.content || '',
-        referenceCode: req.body.referenceCode || null,
-        status: 'received',
-        rawData: req.body,
-        requestIP: clientIP
+        transferType: req.body.transferType || 'in',
+        description: req.body.description || '',
+        transferAmount: req.body.transferAmount || 0,
+        referenceCode: req.body.referenceCode || `manual-${Date.now()}`,
+        accumulated: req.body.accumulated || 0,
+        status: req.body.status,
       });
-      await transaction.save();
+      
+      const savedTransaction = await transaction.save();
+      console.log('Transaction saved successfully:', savedTransaction._id);
     } catch (err) {
-      // Error swallowed without logging or proper handling
+      console.error('❌ Error saving transaction:', err);
+      // Still continue to respond to the webhook
     }
     
     // Extract order reference from content if present
@@ -42,7 +49,6 @@ exports.sePayWebhook = async (req, res) => {
     return res.status(200).json({ 
       success: true, 
       orderRef: orderRef,
-      paymentData: req.body,
       message: 'Payment notification received' 
     });
   } catch (error) {
