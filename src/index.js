@@ -166,10 +166,15 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
     
     console.log(`[VERIFY] Checking transaction: ${transactionId}`);
     
-    // Try to find a transaction where the description contains the order reference (case-insensitive)
-    const transaction = await Transaction.findOne({
-      description: { $regex: transactionId, $options: 'i' }
-    });
+    // Try direct match with referenceCode
+    let transaction = await Transaction.findOne({ referenceCode: transactionId });
+
+    // If not found, try regex match in description (case-insensitive)
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        description: { $regex: transactionId, $options: 'i' }
+      });
+    }
     
     if (!transaction) {
       console.log(`[VERIFY] No transaction found for: ${transactionId}`);
