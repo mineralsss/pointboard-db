@@ -183,10 +183,16 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       });
     }
 
-    // You can add more status logic here if needed
+    // Update the transaction status to 'verified' if not already
+    if (transaction.status !== 'verified') {
+      transaction.status = 'verified';
+      await transaction.save();
+      console.log(`[VERIFY] Transaction ${transactionId} status updated to 'verified'`);
+    }
+
     return res.status(200).json({
       exists: true,
-      status: transaction.status || 'success', // or whatever field you use
+      status: transaction.status,
       transactionId: transaction.referenceCode,
       amount: transaction.transferAmount,
       description: transaction.content
