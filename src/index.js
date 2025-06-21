@@ -189,7 +189,7 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       status: transaction.status || 'success', // or whatever field you use
       transactionId: transaction.referenceCode,
       amount: transaction.transferAmount,
-      description: transaction.description
+      description: transaction.content
     });
   } catch (error) {
     return res.status(500).json({
