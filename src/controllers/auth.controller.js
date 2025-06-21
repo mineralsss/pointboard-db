@@ -3,6 +3,7 @@ const { OK, CREATED } = require("../configs/response.config");
 const authService = require("../services/auth.service");
 const catchAsync = require("../utils/catchAsync");
 const userEvents = require('../events/userEvents');
+const APIError = require("../utils/APIError"); // ADD THIS LINE
 
 class AuthController {
   register = catchAsync(async (req, res) => {
@@ -54,7 +55,6 @@ class AuthController {
       });
       
       console.log(`User created successfully with ID: ${user._id}`);
-      
       // Emit event for sending welcome email
       userEvents.emit('user:registered', user);
       console.log(`Registration event emitted for: ${user.email}`);
@@ -122,8 +122,18 @@ class AuthController {
 
   login = catchAsync(async (req, res) => {
     try {
+      console.log('Login attempt for:', req.body.email);
+      
       const result = await authService.loginWithEmail(req.body);
-      return OK(res, "Login successful", result);
+      console.log('Login result:', result);
+      
+      // Make sure the response format matches frontend expectations
+      return OK(res, "Login successful", {
+        success: true,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        userData: result.userData
+      });
     } catch (error) {
       console.error("Login error:", error);
       
