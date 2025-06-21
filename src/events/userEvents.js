@@ -14,13 +14,16 @@ userEvents.on('user:registered', async (user) => {
     
     console.log(`Sending welcome email to: ${user.email}`);
     
+    // FIX: Use firstName and lastName instead of user.name
+    const fullName = `${user.firstName} ${user.lastName}`.trim();
+    
     await emailService.sendEmail(
       user.email,
       'Welcome to PointBoard!',
-      emailTemplates.welcomeEmail(user.name || 'Valued Customer')
+      emailTemplates.welcomeEmail(fullName || 'Customer')
     );
     
-    console.log(`Welcome email sent to: ${user.email}`);
+    console.log(`Welcome email sent to: ${user.email} with name: ${fullName}`);
   } catch (error) {
     console.error('Failed to send welcome email:', error);
     // Don't throw the error, just log it to prevent disrupting the flow
