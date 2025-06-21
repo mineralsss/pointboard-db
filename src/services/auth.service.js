@@ -33,8 +33,14 @@ class AuthService {
       // Generate auth tokens
       const tokens = this.generateAuthTokens(user);
       
-      // Emit registration event for email notifications
-      userEvents.emit('user:registered', user);
+      // Make sure to pass the complete name to the email event
+      const fullName = `${user.firstName} ${user.lastName}`;
+      
+      // Emit event with proper name
+      userEvents.emit('user:registered', {
+        ...user._doc, // or user.toObject()
+        name: fullName // Add the full name explicitly
+      });
       
       return {
         success: true,

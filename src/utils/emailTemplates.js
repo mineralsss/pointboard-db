@@ -4,8 +4,16 @@
  * @returns {string} - HTML email content
  */
 exports.welcomeEmail = (name) => {
-  // Extract first name or use full name if splitting isn't possible
-  const firstName = name ? name.split(' ')[0] : 'there';
+  console.log('welcomeEmail called with name:', name);
+  
+  // Better name handling
+  let firstName = 'there'; // Default fallback
+  
+  if (name && typeof name === 'string' && name.trim() !== '') {
+    firstName = name.trim().split(' ')[0];
+  }
+  
+  console.log('Using firstName in email:', firstName);
   
   return `
 <!DOCTYPE html>

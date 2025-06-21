@@ -38,7 +38,7 @@ const userSchema = new Schema(
     },
     balance: {
       type: Number,
-      default: 10000000,
+      default: 0,
     },
     certificate: {
       type: [String],
