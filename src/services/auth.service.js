@@ -150,78 +150,102 @@ class AuthService {
     return tokens;
   };
 
-  async requestPasswordReset(email) {
-    // Find user by email
-    const user = await User.findOne({ email });
-    
-    if (!user) {
-      // Don't reveal whether email exists for security reasons
-      return { success: true };
-    }
-    
-    // Generate random token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Hash token and store in database
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
-    
-    // Set token and expiry (1 hour)
-    user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-    
-    await user.save();
-    
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    
-    // Send email
+  // Generate a 6-digit reset code
+  generateResetCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
+  // Step 1: Send reset code to email
+  requestPasswordReset = async (email) => {
     try {
+      // Find user by email
+      const user = await User.findOne({ email });
+      if (!user) {
+        // Don't reveal if email exists or not for security
+        return {
+          success: true,
+          message: "If an account with this email exists, a reset code has been sent."
+        };
+      }
+
+      // Generate 6-digit reset code
+      const resetCode = this.generateResetCode();
+      const resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Save reset code to user
+      await User.findByIdAndUpdate(user._id, {
+        resetPasswordCode: resetCode,
+        resetPasswordExpires: resetCodeExpires
+      });
+
+      // Send reset code email
       await emailService.sendEmail(
         user.email,
-        'Reset Your PointBoard Password',
-        emailTemplates.passwordResetEmail(user.name, resetUrl)
+        'Password Reset Code - PointBoard',
+        emailTemplates.passwordResetCodeEmail(user.firstName, resetCode)
       );
-      
-      return { success: true };
-    } catch (error) {
-      // Roll back token if email fails
-      user.resetPasswordToken = null;
-      user.resetPasswordExpires = null;
-      await user.save();
-      
-      throw new Error('Failed to send password reset email');
-    }
-  }
 
-  async resetPassword(token, newPassword) {
-    // Hash the token for comparison with stored token
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
-    
-    // Find user with valid token that hasn't expired
-    const user = await User.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
-    
-    if (!user) {
-      throw new Error('Invalid or expired token');
+      console.log(`Password reset code sent to: ${email}`);
+
+      return {
+        success: true,
+        message: "Reset code sent to your email address."
+      };
+    } catch (error) {
+      console.error('Error in requestPasswordReset:', error);
+      throw new APIError(500, 'Failed to process password reset request');
     }
-    
-    // Update password and clear reset fields
-    user.password = await bcrypt.hash(newPassword, 10);
-    user.resetPasswordToken = null;
-    user.resetPasswordExpires = null;
-    
-    await user.save();
-    
-    return { success: true };
-  }
+  };
+
+  // Step 2: Verify code and reset password
+  resetPasswordWithCode = async ({ email, resetCode, newPassword }) => {
+    try {
+      // Find user with valid reset code
+      const user = await User.findOne({
+        email,
+        resetPasswordCode: resetCode,
+        resetPasswordExpires: { $gt: new Date() }
+      });
+
+      if (!user) {
+        throw new APIError(400, 'Invalid or expired reset code');
+      }
+
+      // Validate new password
+      if (!newPassword || newPassword.length < 6) {
+        throw new APIError(400, 'Password must be at least 6 characters long');
+      }
+
+      // Hash new password and clear reset fields
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      await User.findByIdAndUpdate(user._id, {
+        password: hashedPassword,
+        resetPasswordCode: undefined,
+        resetPasswordExpires: undefined
+      });
+
+      // Send confirmation email
+      await emailService.sendEmail(
+        user.email,
+        'Password Reset Successful - PointBoard',
+        emailTemplates.passwordResetSuccessEmail(user.firstName)
+      );
+
+      console.log(`Password reset successful for: ${email}`);
+
+      return {
+        success: true,
+        message: "Password reset successfully"
+      };
+    } catch (error) {
+      if (error instanceof APIError) {
+        throw error;
+      }
+      console.error('Error in resetPasswordWithCode:', error);
+      throw new APIError(500, 'Failed to reset password');
+    }
+  };
 }
 
 module.exports = new AuthService();

@@ -170,29 +170,28 @@ class AuthController {
       });
     }
 
-    await authService.requestPasswordReset(email);
+    const result = await authService.requestPasswordReset(email);
 
-    // Always return success to prevent email enumeration attacks
-    return OK(
-      res,
-      "Password reset email sent if account exists",
-      { success: true }
-    );
+    return OK(res, result.message, { success: result.success });
   });
 
   resetPassword = catchAsync(async (req, res) => {
-    const { token, password } = req.body;
+    const { email, resetCode, newPassword } = req.body;
 
-    if (!token || !password) {
+    if (!email || !resetCode || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: "Token and password are required",
+        message: "Email, reset code, and new password are required",
       });
     }
 
-    await authService.resetPassword(token, password);
+    const result = await authService.resetPasswordWithCode({
+      email,
+      resetCode,
+      newPassword
+    });
 
-    return OK(res, "Password successfully reset", { success: true });
+    return OK(res, result.message, { success: result.success });
   });
 }
 

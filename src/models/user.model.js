@@ -66,6 +66,14 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    resetPasswordCode: {
+      type: String,
+      select: false, // Don't include in queries by default
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+    },
   },
   {
     timestamps: true,

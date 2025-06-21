@@ -171,3 +171,89 @@ exports.passwordResetEmail = (name, resetUrl) => {
 </html>
   `;
 };
+
+// Add this method to your existing emailTemplates
+exports.passwordResetCodeEmail = (firstName, resetCode) => {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
+    .header { background-color: #491E6C; color: white; padding: 15px; text-align: center; }
+    .content { padding: 20px; }
+    .code { 
+      background-color: #f8f9fa; 
+      border: 2px dashed #491E6C; 
+      padding: 20px; 
+      text-align: center; 
+      font-size: 24px; 
+      font-weight: bold;
+      letter-spacing: 3px;
+      margin: 20px 0;
+    }
+    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Password Reset Code</h1>
+    </div>
+    <div class="content">
+      <h2>Hello ${firstName}!</h2>
+      <p>You requested to reset your password for your PointBoard account.</p>
+      <p>Use the following code to reset your password:</p>
+      
+      <div class="code">${resetCode}</div>
+      
+      <p><strong>Important:</strong></p>
+      <ul>
+        <li>This code will expire in 15 minutes</li>
+        <li>Don't share this code with anyone</li>
+        <li>If you didn't request this, please ignore this email</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+};
+
+exports.passwordResetSuccessEmail = (firstName) => {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
+    .header { background-color: #28a745; color: white; padding: 15px; text-align: center; }
+    .content { padding: 20px; }
+    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Password Reset Successful</h1>
+    </div>
+    <div class="content">
+      <h2>Hello ${firstName}!</h2>
+      <p>Your password has been successfully reset for your PointBoard account.</p>
+      <p>You can now log in with your new password.</p>
+      <p>If you didn't make this change, please contact our support team immediately.</p>
+      <p>Best regards,<br>The PointBoard Team</p>
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+};
