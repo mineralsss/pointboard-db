@@ -166,31 +166,10 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
     
     console.log(`[VERIFY] Checking transaction: ${transactionId}`);
     
-    // First try direct match with the ID as provided
-    let transaction = await Transaction.findOne({ 
-      referenceCode: transactionId 
+    // Try to find a transaction where the description contains the order reference (case-insensitive)
+    const transaction = await Transaction.findOne({
+      description: { $regex: transactionId, $options: 'i' }
     });
-    
-    // If not found, try matching patterns within description field
-    if (!transaction) {
-      // Extract just the numeric part from PointBoard{NUMBER}
-      const numericId = transactionId.replace(/\D/g, '');
-      
-      // Try to find any transactions with this numeric ID in description
-      // This will match both PointBoard{NUMBER} and PointBoardORDER{NUMBER} patterns
-      if (numericId) {
-        transaction = await Transaction.findOne({
-          description: { $regex: numericId, $options: 'i' }
-        });
-      }
-      
-      // If still not found, try partial text search for the whole ID
-      if (!transaction) {
-        transaction = await Transaction.findOne({
-          description: { $regex: transactionId.substring(0, 10), $options: 'i' }
-        });
-      }
-    }
     
     if (!transaction) {
       console.log(`[VERIFY] No transaction found for: ${transactionId}`);
