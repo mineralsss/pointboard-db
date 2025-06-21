@@ -163,9 +163,8 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
 app.get('/api/transactions/verify/:transactionId', async (req, res) => {
   try {
     const { transactionId } = req.params;
-    
     console.log(`[VERIFY] Checking transaction: ${transactionId}`);
-    
+
     // Try direct match with referenceCode
     let transaction = await Transaction.findOne({ referenceCode: transactionId });
 
@@ -175,7 +174,7 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
         description: { $regex: transactionId, $options: 'i' }
       });
     }
-    
+
     if (!transaction) {
       console.log(`[VERIFY] No transaction found for: ${transactionId}`);
       return res.status(200).json({
@@ -183,25 +182,19 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
         status: 'not_found'
       });
     }
-    
-    console.log(`[VERIFY] Found transaction ${transaction._id}`);
-    console.log(`[VERIFY] Description: ${transaction.description}`);
-    
+
+    // You can add more status logic here if needed
     return res.status(200).json({
       exists: true,
-      status: 'success', // Since we found a match, consider it successful
+      status: transaction.status || 'success', // or whatever field you use
+      transactionId: transaction.referenceCode,
       amount: transaction.transferAmount,
-      timestamp: transaction.transactionDate,
-      transactionId: transaction.referenceCode || transaction._id,
       description: transaction.description
     });
-    
   } catch (error) {
-    console.error('[VERIFY] Error verifying transaction:', error);
     return res.status(500).json({
       exists: false,
       status: 'error',
-      message: 'Error verifying transaction',
       error: error.message
     });
   }
