@@ -57,7 +57,7 @@ app.post("/api/data", (req, res) => {
 });
 
 // POST endpoint to handle bank transactions
-app.post("/api/transaction", (req, res) => {
+app.post("/api/transaction", async (req, res) => {
   try {
     const transaction = req.body;
 
@@ -83,13 +83,27 @@ app.post("/api/transaction", (req, res) => {
       }
     }
 
-    // Process the transaction here
-    // For example, save to MongoDB or perform other operations
+    // Save the transaction to MongoDB
+    const newTransaction = new Transaction({
+      gateway: transaction.gateway,
+      transactionDate: transaction.transactionDate,
+      accountNumber: transaction.accountNumber,
+      subAccount: transaction.subAccount,
+      code: transaction.code,
+      content: transaction.content,
+      transferType: transaction.transferType,
+      description: transaction.description,
+      transferAmount: transaction.transferAmount,
+      referenceCode: transaction.referenceCode,
+      accumulated: transaction.accumulated || 0,
+      status: 'received' // or whatever initial status you want
+    });
 
-    // Return success status code
+    await newTransaction.save();
+
     return res.status(200).json({
       success: true,
-      message: "Transaction processed successfully",
+      message: "Transaction processed and saved successfully",
     });
   } catch (error) {
     console.error("Error processing transaction:", error);
