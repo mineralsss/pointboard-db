@@ -29,7 +29,7 @@ class AuthService {
       await user.save();
 
       // Create verification URL
-      const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+      const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
 
       // Send welcome email with verification link
       await emailService.sendEmail({
@@ -93,7 +93,7 @@ class AuthService {
       await user.save();
 
       // Create verification URL
-      const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+      const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
 
       // Send welcome email with verification link
       await emailService.sendEmail({
