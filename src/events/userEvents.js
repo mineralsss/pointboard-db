@@ -1,6 +1,8 @@
 const EventEmitter = require('events');
 const emailService = require('../services/email.service');
 const emailTemplates = require('../utils/emailTemplates');
+const crypto = require('crypto');
+const User = require('../models/user.model');
 
 const userEvents = new EventEmitter();
 
@@ -17,10 +19,24 @@ userEvents.on('user:registered', async (user) => {
     // FIX: Use firstName and lastName instead of user.name
     const fullName = `${user.firstName} ${user.lastName}`.trim();
     
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    // Save verification token to database
+    await User.findByIdAndUpdate(user._id, {
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires
+    });
+    
+    // Create verification URL
+    const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
+    
+    // Send email with verification link
     await emailService.sendEmail(
       user.email,
       'Welcome to PointBoard!',
-      emailTemplates.welcomeEmail(fullName || 'Customer')
+      emailTemplates.welcomeEmail(fullName || 'Customer', verificationUrl)
     );
     
     console.log(`Welcome email sent to: ${user.email} with name: ${fullName}`);

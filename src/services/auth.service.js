@@ -115,7 +115,7 @@ class AuthService {
       const userToCreate = {
         email: userData.email,
         password: await bcrypt.hash(userData.password, 10),
-        phoneNumber: userData.phoneNumber,
+        phone: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role,
@@ -131,7 +131,7 @@ class AuthService {
       await this.sendVerificationEmail(user);
       
       // Generate auth tokens (but user won't be able to use them until verified)
-      const tokens = this.generateAuthTokens(user);
+      const tokens = await createTokenPair({ userID: user._id });
       
       // Make sure to pass the complete name to the email event
       const fullName = `${user.firstName} ${user.lastName}`;
@@ -146,9 +146,9 @@ class AuthService {
         success: true,
         user: {
           id: user._id,
-          name: user.name,
+          name: user.name || `${user.firstName} ${user.lastName}`,
           email: user.email,
-          phoneNumber: user.phoneNumber
+          phoneNumber: user.phone
         },
         tokens,
         message: 'Registration successful. Please check your email to verify your account.'
@@ -166,7 +166,7 @@ class AuthService {
           };
         }
         
-        if (keyPattern.phoneNumber) {
+        if (keyPattern.phone) {
           return {
             success: false,
             errorType: 'duplicate_phone',

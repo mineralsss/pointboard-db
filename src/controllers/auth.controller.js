@@ -11,66 +11,33 @@ class AuthController {
     console.log('Registration request received with body:', JSON.stringify(req.body, null, 2));
     
     try {
-      // Check if email already exists before trying to create
-      const existingEmail = await User.findOne({ email: req.body.email });
-      if (existingEmail) {
-        console.log(`Registration attempt with duplicate email: ${req.body.email}`);
-        return res.status(400).json({
-          success: false,
-          errorType: 'duplicate_email',
-          message: 'This email address is already registered'
-        });
-      }
-      
-      // Check if phone already exists (if provided)
-      if (req.body.phone) {
-        const existingPhone = await User.findOne({ phone: req.body.phone });
-        if (existingPhone) {
-          console.log(`Registration attempt with duplicate phone: ${req.body.phone}`);
-          return res.status(400).json({
-            success: false,
-            errorType: 'duplicate_phone',
-            message: 'This phone number is already registered'
-          });
-        }
-      }
-      
-      // Log what we're about to create
-      console.log('Creating user with data:', {
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        email: req.body.email,
-        phone: req.body.phone || 'Not provided'
-        // Don't log password for security reasons
-      });
-      
-      // Create the user
-      const user = await User.create({
+      // Prepare user data for the service
+      const userData = {
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         email: req.body.email,
         password: req.body.password,
-        phone: req.body.phone
-        // Add other fields as needed
-      });
+        phoneNumber: req.body.phone, // Map phone to phoneNumber
+        address: req.body.address,
+        dob: req.body.dob,
+        role: req.body.role || 'user' // Default role if not provided
+      };
       
-      console.log(`User created successfully with ID: ${user._id}`);
-      // Emit event for sending welcome email
-      userEvents.emit('user:registered', user);
-      console.log(`Registration event emitted for: ${user.email}`);
+      // Call the auth service to register user
+      const result = await authService.register(userData);
+      
+      // Check for success
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
       
       // Return created response
       return CREATED(
         res,
-        'User registered successfully',
+        result.message || 'User registered successfully',
         {
           success: true,
-          user: {
-            id: user._id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email
-          }
+          user: result.user
         }
       );
     } catch (error) {
@@ -88,7 +55,7 @@ class AuthController {
           errorType: `duplicate_${field}`,
           message: field === 'email' 
             ? 'This email address is already registered' 
-            : field === 'phone'
+            : field === 'phoneNumber' || field === 'phone'
               ? 'This phone number is already registered'
               : `The ${field} is already in use`
         });
