@@ -74,6 +74,14 @@ const userSchema = new Schema(
       type: Date,
       select: false,
     },
+    emailVerificationToken: {
+      type: String,
+      select: false, // Don't include in queries by default
+    },
+    emailVerificationExpires: {
+      type: Date,
+      select: false,
+    },
   },
   {
     timestamps: true,

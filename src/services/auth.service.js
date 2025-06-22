@@ -12,6 +12,88 @@ const emailService = require('./email.service');
 const emailTemplates = require('../utils/emailTemplates');
 
 class AuthService {
+  // Generate email verification token
+  generateEmailVerificationToken = () => {
+    return crypto.randomBytes(32).toString('hex');
+  };
+
+  // Send verification email
+  sendVerificationEmail = async (user) => {
+    try {
+      const verificationToken = this.generateEmailVerificationToken();
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Save verification token to user
+      user.emailVerificationToken = verificationToken;
+      user.emailVerificationExpires = verificationExpires;
+      await user.save();
+
+      // Create verification URL
+      const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+
+      // Send verification email
+      await emailService.sendEmail({
+        to: user.email,
+        subject: 'Verify Your Email Address',
+        html: emailTemplates.verificationEmail({
+          name: `${user.firstName} ${user.lastName}`,
+          verificationUrl: verificationUrl
+        })
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error sending verification email:', error);
+      throw new APIError(500, 'Failed to send verification email');
+    }
+  };
+
+  // Verify email with token
+  verifyEmail = async (token) => {
+    try {
+      const user = await User.findOne({
+        emailVerificationToken: token,
+        emailVerificationExpires: { $gt: Date.now() }
+      }).select('+emailVerificationToken +emailVerificationExpires');
+
+      if (!user) {
+        throw new APIError(400, 'Invalid or expired verification token');
+      }
+
+      // Mark user as verified
+      user.isVerified = true;
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      await user.save();
+
+      return user;
+    } catch (error) {
+      console.error('Error verifying email:', error);
+      throw error;
+    }
+  };
+
+  // Resend verification email
+  resendVerificationEmail = async (email) => {
+    try {
+      const user = await User.findOne({ email }).select('+emailVerificationToken +emailVerificationExpires');
+      
+      if (!user) {
+        throw new APIError(404, 'User not found');
+      }
+
+      if (user.isVerified) {
+        throw new APIError(400, 'Email is already verified');
+      }
+
+      await this.sendVerificationEmail(user);
+      return { message: 'Verification email sent successfully' };
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      throw error;
+    }
+  };
+
   register = async (userData) => {
     try {
       // Prepare user data
@@ -24,13 +106,16 @@ class AuthService {
         role: userData.role,
         address: userData.address,
         dob: userData.dob,
-        isVerified: true, // Auto-verify for now
+        isVerified: false, // Start as unverified
       };
 
       // Create user with all required fields
       const user = await User.create(userToCreate);
       
-      // Generate auth tokens
+      // Send verification email
+      await this.sendVerificationEmail(user);
+      
+      // Generate auth tokens (but user won't be able to use them until verified)
       const tokens = this.generateAuthTokens(user);
       
       // Make sure to pass the complete name to the email event
@@ -50,7 +135,8 @@ class AuthService {
           email: user.email,
           phoneNumber: user.phoneNumber
         },
-        tokens
+        tokens,
+        message: 'Registration successful. Please check your email to verify your account.'
       };
     } catch (error) {
       // Handle MongoDB duplicate key errors explicitly

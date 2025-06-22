@@ -160,6 +160,61 @@ class AuthController {
     );
   });
 
+  // Verify email with token
+  verifyEmail = catchAsync(async (req, res) => {
+    const { token } = req.params;
+    
+    try {
+      const user = await authService.verifyEmail(token);
+      
+      return OK(
+        res,
+        "Email verified successfully! You can now log in to your account.",
+        {
+          success: true,
+          user: {
+            id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName
+          }
+        }
+      );
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Resend verification email
+  resendVerificationEmail = catchAsync(async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+    
+    try {
+      const result = await authService.resendVerificationEmail(email);
+      
+      return OK(
+        res,
+        result.message,
+        { success: true }
+      );
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
   requestPasswordReset = catchAsync(async (req, res) => {
     const { email } = req.body;
 

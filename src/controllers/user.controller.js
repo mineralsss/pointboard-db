@@ -28,7 +28,28 @@ class UserController {
   });
 
   getMe = catchAsync(async (req, res) => {
-    return OK(res, "Success", await userService.getUserInfo(req.user._id));
+    console.log('[GETME] Request received, user:', req.user);
+    
+    if (!req.user || !req.user._id) {
+      console.log('[GETME] No user found in request');
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    
+    try {
+      const userInfo = await userService.getUserInfo(req.user._id);
+      console.log('[GETME] User info retrieved successfully');
+      return OK(res, "Success", userInfo);
+    } catch (error) {
+      console.error('[GETME] Error getting user info:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error retrieving user information',
+        error: error.message
+      });
+    }
   });
 
   getAllUsers = catchAsync(async (req, res) => {

@@ -203,17 +203,61 @@ exports.passwordResetCodeEmail = (firstName, resetCode) => {
     </div>
     <div class="content">
       <h2>Hello ${firstName}!</h2>
-      <p>You requested to reset your password for your PointBoard account.</p>
+      <p>We received a request to reset your password for your PointBoard account.</p>
       <p>Use the following code to reset your password:</p>
-      
       <div class="code">${resetCode}</div>
-      
-      <p><strong>Important:</strong></p>
-      <ul>
-        <li>This code will expire in 15 minutes</li>
-        <li>Don't share this code with anyone</li>
-        <li>If you didn't request this, please ignore this email</li>
-      </ul>
+      <p>This code is valid for 10 minutes. If you didn't request this password reset, please ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+};
+
+/**
+ * Generates HTML content for email verification email
+ * @param {string} name - User's name
+ * @param {string} verificationUrl - Email verification URL
+ * @returns {string} - HTML email content
+ */
+exports.verificationEmail = ({ name, verificationUrl }) => {
+  // Extract first name or use full name
+  const firstName = name ? name.split(' ')[0] : 'there';
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
+    .header { background-color: #27ae60; color: white; padding: 15px; text-align: center; }
+    .content { padding: 20px; }
+    .button { display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+    .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
+    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Verify Your Email Address</h1>
+    </div>
+    <div class="content">
+      <h2>Hello ${firstName}!</h2>
+      <p>Thank you for registering with PointBoard! To complete your registration, please verify your email address by clicking the button below:</p>
+      <p style="text-align: center;">
+        <a href="${verificationUrl}" class="button">Verify Email Address</a>
+      </p>
+      <div class="note">
+        <p><strong>Important:</strong> This verification link is valid for 24 hours. If you don't verify your email within this time, you'll need to request a new verification email.</p>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+      </div>
+      <p>If you didn't create an account with PointBoard, please ignore this email.</p>
     </div>
     <div class="footer">
       <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
