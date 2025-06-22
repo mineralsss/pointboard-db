@@ -32,11 +32,11 @@ class AuthService {
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
 
       // Send welcome email with verification link
-      await emailService.sendEmail({
-        to: user.email,
-        subject: 'Welcome to PointBoard - Verify Your Email',
-        html: emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
-      });
+      await emailService.sendEmail(
+        user.email,
+        'Welcome to PointBoard - Verify Your Email',
+        emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
+      );
 
       return true;
     } catch (error) {
@@ -96,11 +96,11 @@ class AuthService {
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
 
       // Send welcome email with verification link
-      await emailService.sendEmail({
-        to: user.email,
-        subject: 'Welcome to PointBoard - Verify Your Email',
-        html: emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
-      });
+      await emailService.sendEmail(
+        user.email,
+        'Welcome to PointBoard - Verify Your Email',
+        emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
+      );
 
       return { message: 'Verification email sent successfully' };
     } catch (error) {
