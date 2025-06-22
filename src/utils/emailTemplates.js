@@ -1,10 +1,11 @@
 /**
- * Generates HTML content for welcome email
+ * Generates HTML content for welcome email with verification link
  * @param {string} name - User's name
+ * @param {string} verificationUrl - Email verification URL
  * @returns {string} - HTML email content
  */
-exports.welcomeEmail = (name) => {
-  console.log('welcomeEmail called with name:', name);
+exports.welcomeEmail = (name, verificationUrl) => {
+  console.log('welcomeEmail called with name:', name, 'and verificationUrl:', verificationUrl);
   
   // Better name handling
   let firstName = 'there'; // Default fallback
@@ -24,6 +25,8 @@ exports.welcomeEmail = (name) => {
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
     .header { background-color: #3498db; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
+    .button { display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0; }
+    .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
     .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; }
   </style>
 </head>
@@ -35,7 +38,20 @@ exports.welcomeEmail = (name) => {
     <div class="content">
       <h2>Hello ${firstName}!</h2>
       <p>Thank you for registering with PointBoard. We're excited to have you with us!</p>
-      <p>Your account has been created successfully and you can now start using our services.</p>
+      
+      <p><strong>To complete your registration and start using our services, please verify your email address:</strong></p>
+      
+      <p style="text-align: center;">
+        <a href="${verificationUrl}" class="button">Verify Email Address</a>
+      </p>
+      
+      <div class="note">
+        <p><strong>Important:</strong> This verification link is valid for 24 hours. If you don't verify your email within this time, you'll need to request a new verification email.</p>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+      </div>
+      
+      <p>Once verified, you'll have full access to all PointBoard features.</p>
       <p>If you have any questions, feel free to contact our support team.</p>
       <p>Best regards,<br>The PointBoard Team</p>
     </div>
@@ -49,11 +65,12 @@ exports.welcomeEmail = (name) => {
 };
 
 /**
- * Generates plain text version of welcome email (for clients that don't support HTML)
+ * Generates plain text version of welcome email with verification link (for clients that don't support HTML)
  * @param {string} name - User's name
+ * @param {string} verificationUrl - Email verification URL
  * @returns {string} - Plain text email content
  */
-exports.welcomeEmailText = (name) => {
+exports.welcomeEmailText = (name, verificationUrl) => {
   return `
 Welcome to PointBoard!
 
@@ -61,7 +78,13 @@ Hello ${name}!
 
 Thank you for registering with PointBoard. We're excited to have you with us!
 
-Your account has been created successfully and you can now start using our services.
+To complete your registration and start using our services, please verify your email address by clicking the link below:
+
+${verificationUrl}
+
+Important: This verification link is valid for 24 hours. If you don't verify your email within this time, you'll need to request a new verification email.
+
+Once verified, you'll have full access to all PointBoard features.
 
 If you have any questions, feel free to contact our support team.
 

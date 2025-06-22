@@ -31,14 +31,11 @@ class AuthService {
       // Create verification URL
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
 
-      // Send verification email
+      // Send welcome email with verification link
       await emailService.sendEmail({
         to: user.email,
-        subject: 'Verify Your Email Address',
-        html: emailTemplates.verificationEmail({
-          name: `${user.firstName} ${user.lastName}`,
-          verificationUrl: verificationUrl
-        })
+        subject: 'Welcome to PointBoard - Verify Your Email',
+        html: emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
       });
 
       return true;
@@ -86,7 +83,25 @@ class AuthService {
         throw new APIError(400, 'Email is already verified');
       }
 
-      await this.sendVerificationEmail(user);
+      // Generate new verification token
+      const verificationToken = this.generateEmailVerificationToken();
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Update verification token
+      user.emailVerificationToken = verificationToken;
+      user.emailVerificationExpires = verificationExpires;
+      await user.save();
+
+      // Create verification URL
+      const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+
+      // Send welcome email with verification link
+      await emailService.sendEmail({
+        to: user.email,
+        subject: 'Welcome to PointBoard - Verify Your Email',
+        html: emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
+      });
+
       return { message: 'Verification email sent successfully' };
     } catch (error) {
       console.error('Error resending verification email:', error);
