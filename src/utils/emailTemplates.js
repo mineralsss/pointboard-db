@@ -21,7 +21,7 @@ exports.welcomeEmail = (name, verificationUrl) => {
   // Ensure verificationUrl is not undefined
   if (!verificationUrl) {
     console.error('ERROR: verificationUrl is undefined or null!');
-    verificationUrl = 'http://localhost:5173/verify-email?token=ERROR_NO_TOKEN';
+    verificationUrl = 'https://pointboard.vercel.app/verify-email/ERROR_NO_TOKEN';
   }
   
   return `

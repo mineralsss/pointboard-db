@@ -30,7 +30,7 @@ userEvents.on('user:registered', async (user) => {
     });
     
     // Create verification URL
-    const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
     
     // Send email with verification link
     await emailService.sendEmail(
