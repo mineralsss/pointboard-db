@@ -20,7 +20,7 @@ class AuthController {
         phoneNumber: req.body.phone, // Map phone to phoneNumber
         address: req.body.address,
         dob: req.body.dob,
-        role: req.body.role || 'user' // Default role if not provided
+        role: req.body.role || 'student' // Default to student role
       };
       
       // Call the auth service to register user

@@ -10,6 +10,7 @@ const userEvents = require('../events/userEvents');
 const crypto = require('crypto');
 const emailService = require('./email.service');
 const emailTemplates = require('../utils/emailTemplates');
+const roles = require('../configs/role.config');
 
 class AuthService {
   // Generate email verification token
@@ -118,7 +119,7 @@ class AuthService {
         phone: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
-        role: userData.role,
+        role: userData.role || roles.STUDENT, // Default to student
         address: userData.address,
         dob: userData.dob,
         isVerified: false, // Start as unverified
