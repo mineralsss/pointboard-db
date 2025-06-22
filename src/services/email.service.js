@@ -27,6 +27,9 @@ class EmailService {
       return { success: false, error: 'Email service not configured' };
     }
     
+    const startTime = Date.now();
+    console.log(`Starting email send to ${to} at ${new Date().toISOString()}`);
+    
     try {
       const msg = {
         to,
@@ -36,11 +39,22 @@ class EmailService {
         text: plainTextBody || htmlBody.replace(/<[^>]*>/g, '') // Strip HTML tags for text version
       };
       
-      await sgMail.send(msg);
-      console.log(`Email sent successfully to ${to}`);
-      return { success: true };
+      // Use non-blocking send (don't await if not needed for response)
+      const sendPromise = sgMail.send(msg);
+      
+      // Log the success but don't wait for it to complete the function
+      sendPromise.then(() => {
+        const endTime = Date.now();
+        console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
+      }).catch(err => {
+        console.error(`Error sending email to ${to}:`, err);
+      });
+      
+      // Return early while sending continues in background
+      return { success: true, message: 'Email sending initiated' };
     } catch (error) {
-      console.error('Error sending email:', error);
+      const endTime = Date.now();
+      console.error(`Error preparing email to ${to} (${endTime - startTime}ms):`, error);
       return { success: false, error: error.message };
     }
   }

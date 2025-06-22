@@ -24,20 +24,27 @@ class AuthService {
       const verificationToken = this.generateEmailVerificationToken();
       const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Save verification token to user
-      user.emailVerificationToken = verificationToken;
-      user.emailVerificationExpires = verificationExpires;
-      await user.save();
+      // Save verification token to user - fire and continue without waiting
+      const savePromise = User.findByIdAndUpdate(user._id, {
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires
+      });
 
-      // Create verification URL
+      // Create verification URL immediately
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
 
-      // Send welcome email with verification link
-      await emailService.sendEmail(
+      // Start sending the email right away
+      const emailPromise = emailService.sendEmail(
         user.email,
         'Welcome to PointBoard - Verify Your Email',
         emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
       );
+      
+      // Wait for both operations to complete
+      const [emailResult] = await Promise.all([
+        emailPromise, 
+        savePromise
+      ]);
 
       return true;
     } catch (error) {
@@ -88,20 +95,27 @@ class AuthService {
       const verificationToken = this.generateEmailVerificationToken();
       const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Update verification token
-      user.emailVerificationToken = verificationToken;
-      user.emailVerificationExpires = verificationExpires;
-      await user.save();
+      // Update verification token - start this operation but don't wait
+      const updatePromise = User.findByIdAndUpdate(user._id, {
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires
+      });
 
-      // Create verification URL
+      // Create verification URL immediately
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
 
-      // Send welcome email with verification link
-      await emailService.sendEmail(
+      // Start sending the email right away
+      const emailPromise = emailService.sendEmail(
         user.email,
         'Welcome to PointBoard - Verify Your Email',
         emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
       );
+      
+      // Wait for both operations to complete
+      const [emailResult] = await Promise.all([
+        emailPromise,
+        updatePromise
+      ]);
 
       return { message: 'Verification email sent successfully' };
     } catch (error) {
@@ -128,20 +142,11 @@ class AuthService {
       // Create user with all required fields
       const user = await User.create(userToCreate);
       
-      // Send verification email
+      // Send verification email directly without emitting event
       await this.sendVerificationEmail(user);
       
       // Generate auth tokens (but user won't be able to use them until verified)
       const tokens = await createTokenPair({ userID: user._id });
-      
-      // Make sure to pass the complete name to the email event
-      const fullName = `${user.firstName} ${user.lastName}`;
-      
-      // Emit event with proper name
-      userEvents.emit('user:registered', {
-        ...user._doc, // or user.toObject()
-        name: fullName // Add the full name explicitly
-      });
       
       return {
         success: true,
