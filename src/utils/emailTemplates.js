@@ -34,8 +34,8 @@ exports.welcomeEmail = (name, verificationUrl) => {
 <style>
 body{font-family:Arial,sans-serif;line-height:1.5;color:#333;margin:0;padding:0}
 .container{max-width:600px;margin:0 auto;padding:15px}
-.header{background:#3498db;color:#fff;padding:10px;text-align:center}
-.button{display:inline-block;background:#27ae60;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold}
+.header{background:#4c1275;color:#fff;padding:10px;text-align:center}
+.button{display:inline-block;background:#4c1275;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold}
 .footer{font-size:12px;color:#777;text-align:center;margin-top:20px}
 </style>
 </head>
@@ -155,9 +155,9 @@ exports.passwordResetEmail = (name, resetUrl) => {
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
-    .header { background-color: #3498db; color: white; padding: 15px; text-align: center; }
+    .header { background-color: #4c1275; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
-    .button { display: inline-block; background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
+    .button { display: inline-block; background-color: #4c1275; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
     .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
     .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
   </style>
@@ -196,11 +196,11 @@ exports.passwordResetCodeEmail = (firstName, resetCode) => {
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
-    .header { background-color: #491E6C; color: white; padding: 15px; text-align: center; }
+    .header { background-color: #4c1275; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
     .code { 
       background-color: #f8f9fa; 
-      border: 2px dashed #491E6C; 
+      border: 2px dashed #4c1275; 
       padding: 20px; 
       text-align: center; 
       font-size: 24px; 
@@ -249,9 +249,9 @@ exports.verificationEmail = ({ name, verificationUrl }) => {
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
-    .header { background-color: #27ae60; color: white; padding: 15px; text-align: center; }
+    .header { background-color: #4c1275; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
-    .button { display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+    .button { display: inline-block; background-color: #4c1275; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; }
     .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
     .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
   </style>
@@ -291,7 +291,7 @@ exports.passwordResetSuccessEmail = (firstName) => {
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
-    .header { background-color: #28a745; color: white; padding: 15px; text-align: center; }
+    .header { background-color: #4c1275; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
     .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; }
   </style>
