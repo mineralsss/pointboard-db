@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const emailService = require('./email.service');
 const emailTemplates = require('../utils/emailTemplates');
 const roles = require('../configs/role.config');
+const { setImmediate } = require('timers');
 
 class AuthService {
   // Generate email verification token
@@ -24,32 +25,26 @@ class AuthService {
       const verificationToken = this.generateEmailVerificationToken();
       const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Save verification token to user - fire and continue without waiting
-      const savePromise = User.findByIdAndUpdate(user._id, {
+      // Save verification token to user
+      await User.findByIdAndUpdate(user._id, {
         emailVerificationToken: verificationToken,
         emailVerificationExpires: verificationExpires
       });
 
-      // Create verification URL immediately
+      // Create verification URL
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
 
-      // Start sending the email right away
-      const emailPromise = emailService.sendEmail(
+      // Send welcome email with verification link
+      const result = await emailService.sendEmail(
         user.email,
         'Welcome to PointBoard - Verify Your Email',
         emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
       );
-      
-      // Wait for both operations to complete
-      const [emailResult] = await Promise.all([
-        emailPromise, 
-        savePromise
-      ]);
 
-      return true;
+      return result.success;
     } catch (error) {
       console.error('Error sending verification email:', error);
-      throw new APIError(500, 'Failed to send verification email');
+      return false; // Don't throw error, just return false to indicate failure
     }
   };
 
@@ -95,31 +90,33 @@ class AuthService {
       const verificationToken = this.generateEmailVerificationToken();
       const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Update verification token - start this operation but don't wait
-      const updatePromise = User.findByIdAndUpdate(user._id, {
+      // Update verification token
+      await User.findByIdAndUpdate(user._id, {
         emailVerificationToken: verificationToken,
         emailVerificationExpires: verificationExpires
       });
 
-      // Create verification URL immediately
+      // Create verification URL
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
 
-      // Start sending the email right away
-      const emailPromise = emailService.sendEmail(
-        user.email,
-        'Welcome to PointBoard - Verify Your Email',
-        emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
-      );
-      
-      // Wait for both operations to complete
-      const [emailResult] = await Promise.all([
-        emailPromise,
-        updatePromise
-      ]);
+      // Send email in the background without blocking
+      setImmediate(() => {
+        emailService.sendEmail(
+          user.email,
+          'Welcome to PointBoard - Verify Your Email',
+          emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
+        )
+        .then(result => {
+          console.log(`Resending verification email result: ${result.success ? 'success' : 'failed'}`);
+        })
+        .catch(err => {
+          console.error('Error in background email sending:', err);
+        });
+      });
 
-      return { message: 'Verification email sent successfully' };
+      return { message: 'Verification email sending initiated. Please check your inbox shortly.' };
     } catch (error) {
-      console.error('Error resending verification email:', error);
+      console.error('Error in resendVerificationEmail:', error);
       throw error;
     }
   };
@@ -142,11 +139,23 @@ class AuthService {
       // Create user with all required fields
       const user = await User.create(userToCreate);
       
-      // Send verification email directly without emitting event
-      await this.sendVerificationEmail(user);
-      
-      // Generate auth tokens (but user won't be able to use them until verified)
+      // Generate tokens
       const tokens = await createTokenPair({ userID: user._id });
+      
+      // Send verification email asynchronously (don't wait/block)
+      setImmediate(() => {
+        this.sendVerificationEmail(user)
+          .then(success => {
+            if (success) {
+              console.log(`Verification email sent successfully to ${user.email}`);
+            } else {
+              console.error(`Failed to send verification email to ${user.email}`);
+            }
+          })
+          .catch(err => {
+            console.error(`Error sending verification email to ${user.email}:`, err);
+          });
+      });
       
       return {
         success: true,

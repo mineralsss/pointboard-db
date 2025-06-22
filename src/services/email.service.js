@@ -54,27 +54,23 @@ class EmailService {
         }
       };
       
-      // Use a timeout to prevent hangs
-      const emailPromise = sgMail.send(msg);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Email sending timeout')), 15000)
-      );
+      // TRUE non-blocking send - fire and forget
+      // Don't wait for the response at all
+      sgMail.send(msg)
+        .then(() => {
+          const endTime = Date.now();
+          console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
+        })
+        .catch((error) => {
+          const endTime = Date.now();
+          console.error(`Error sending email to ${to} (${endTime - startTime}ms):`, error);
+        });
       
-      await Promise.race([emailPromise, timeoutPromise]);
-      
-      const endTime = Date.now();
-      console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
-      return { success: true };
+      // Return immediately without waiting
+      return { success: true, message: 'Email sending initiated' };
     } catch (error) {
-      const endTime = Date.now();
-      console.error(`Error sending email to ${to} (${endTime - startTime}ms):`, error);
-      
-      // Don't block on failure but allow process to continue
-      return { 
-        success: false, 
-        error: error.message,
-        timedOut: error.message === 'Email sending timeout'
-      };
+      console.error(`Error preparing email to ${to}:`, error);
+      return { success: false, error: error.message };
     }
   }
 }
