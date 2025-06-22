@@ -24,52 +24,36 @@ exports.welcomeEmail = (name, verificationUrl) => {
     verificationUrl = 'https://pointboard.vercel.app/verify-email/ERROR_NO_TOKEN';
   }
   
+  // Simpler, lighter HTML template
   return `
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
-    .header { background-color: #3498db; color: white; padding: 15px; text-align: center; }
-    .content { padding: 20px; }
-    .button { display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0; }
-    .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
-    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:Arial,sans-serif;line-height:1.5;color:#333;margin:0;padding:0}
+.container{max-width:600px;margin:0 auto;padding:15px}
+.header{background:#3498db;color:#fff;padding:10px;text-align:center}
+.button{display:inline-block;background:#27ae60;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold}
+.footer{font-size:12px;color:#777;text-align:center;margin-top:20px}
+</style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Welcome to PointBoard!</h1>
-    </div>
-    <div class="content">
-      <h2>Hello ${firstName}!</h2>
-      <p>Thank you for registering with PointBoard. We're excited to have you with us!</p>
-      
-      <p><strong>To complete your registration and start using our services, please verify your email address:</strong></p>
-      
-      <p style="text-align: center;">
-        <a href="${verificationUrl}" class="button">Verify Email Address</a>
-      </p>
-      
-      <div class="note">
-        <p><strong>Important:</strong> This verification link is valid for 24 hours. If you don't verify your email within this time, you'll need to request a new verification email.</p>
-        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
-      </div>
-      
-      <p>Once verified, you'll have full access to all PointBoard features.</p>
-      <p>If you have any questions, feel free to contact our support team.</p>
-      <p>Best regards,<br>The PointBoard Team</p>
-    </div>
-    <div class="footer">
-      <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>
-    </div>
-  </div>
+<div class="container">
+<div class="header"><h1>Welcome to PointBoard!</h1></div>
+<div style="padding:15px">
+<h2>Hello ${firstName}!</h2>
+<p>Thank you for registering with PointBoard. Please verify your email:</p>
+<p style="text-align:center"><a href="${verificationUrl}" class="button">Verify Email</a></p>
+<p>Or copy this link: <span style="color:#666;word-break:break-all">${verificationUrl}</span></p>
+<p>This link expires in 24 hours.</p>
+<p>Best regards,<br>The PointBoard Team</p>
+</div>
+<div class="footer">© ${new Date().getFullYear()} PointBoard</div>
+</div>
 </body>
-</html>
-  `;
+</html>`;
 };
 
 /**

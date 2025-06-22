@@ -31,31 +31,50 @@ class EmailService {
     console.log(`Starting email send to ${to} at ${new Date().toISOString()}`);
     
     try {
+      // Reduce email size by minifying HTML if it's large
+      const compactHtml = htmlBody.length > 10000 ? 
+        htmlBody.replace(/\s+/g, ' ').replace(/>\s+</g, '><') : htmlBody;
+      
+      // Generate plain text only if not provided (optimize)
+      const plainText = plainTextBody || 
+        compactHtml.replace(/<br\s*\/?>/gi, '\n')
+                   .replace(/<\/p>/gi, '\n\n')
+                   .replace(/<[^>]*>/g, '');
+      
       const msg = {
         to,
-        from: process.env.FROM_EMAIL || 'noreply@pointboard.com', // Must be verified in SendGrid
+        from: process.env.FROM_EMAIL || 'noreply@pointboard.com',
         subject,
-        html: htmlBody,
-        text: plainTextBody || htmlBody.replace(/<[^>]*>/g, '') // Strip HTML tags for text version
+        html: compactHtml,
+        text: plainText,
+        // Add these optimization flags for SendGrid
+        tracking_settings: {
+          click_tracking: { enable: false },
+          open_tracking: { enable: false }
+        }
       };
       
-      // Use non-blocking send (don't await if not needed for response)
-      const sendPromise = sgMail.send(msg);
+      // Use a timeout to prevent hangs
+      const emailPromise = sgMail.send(msg);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email sending timeout')), 15000)
+      );
       
-      // Log the success but don't wait for it to complete the function
-      sendPromise.then(() => {
-        const endTime = Date.now();
-        console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
-      }).catch(err => {
-        console.error(`Error sending email to ${to}:`, err);
-      });
+      await Promise.race([emailPromise, timeoutPromise]);
       
-      // Return early while sending continues in background
-      return { success: true, message: 'Email sending initiated' };
+      const endTime = Date.now();
+      console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
+      return { success: true };
     } catch (error) {
       const endTime = Date.now();
-      console.error(`Error preparing email to ${to} (${endTime - startTime}ms):`, error);
-      return { success: false, error: error.message };
+      console.error(`Error sending email to ${to} (${endTime - startTime}ms):`, error);
+      
+      // Don't block on failure but allow process to continue
+      return { 
+        success: false, 
+        error: error.message,
+        timedOut: error.message === 'Email sending timeout'
+      };
     }
   }
 }

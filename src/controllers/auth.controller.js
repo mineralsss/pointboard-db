@@ -31,10 +31,10 @@ class AuthController {
         return res.status(400).json(result);
       }
       
-      // Return created response
+      // Return created response - don't wait for email success
       return CREATED(
         res,
-        result.message || 'User registered successfully',
+        "User registered successfully. Please check your email for verification instructions.",
         {
           success: true,
           user: result.user
