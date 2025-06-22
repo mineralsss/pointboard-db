@@ -6,6 +6,8 @@
  */
 exports.welcomeEmail = (name, verificationUrl) => {
   console.log('welcomeEmail called with name:', name, 'and verificationUrl:', verificationUrl);
+  console.log('Type of verificationUrl:', typeof verificationUrl);
+  console.log('verificationUrl length:', verificationUrl ? verificationUrl.length : 'undefined');
   
   // Better name handling
   let firstName = 'there'; // Default fallback
@@ -15,6 +17,12 @@ exports.welcomeEmail = (name, verificationUrl) => {
   }
   
   console.log('Using firstName in email:', firstName);
+  
+  // Ensure verificationUrl is not undefined
+  if (!verificationUrl) {
+    console.error('ERROR: verificationUrl is undefined or null!');
+    verificationUrl = 'http://localhost:5173/verify-email?token=ERROR_NO_TOKEN';
+  }
   
   return `
 <!DOCTYPE html>

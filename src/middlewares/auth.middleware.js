@@ -29,10 +29,10 @@ passport.use(jwtStrategy);
 const verifyCallback =
   (req, resolve, reject, roles) => async (err, user, info) => {
     if (err || info || !user) {
-      if (
+      if (info && (
         info.name === "JsonWebTokenError" ||
         info.name === "TokenExpiredError"
-      ) {
+      )) {
         return reject(new APIError(401, "Invalid token or expired"));
       }
 
