@@ -226,22 +226,38 @@ class AuthService {
   };
 
   loginWithEmail = async ({ email, password }) => {
+    console.log(`[LOGIN] Attempting login for: ${email}`);
+    
     // Find user by email
     const user = await userRepo.getByEmail(email);
     if (!user) {
+      console.log(`[LOGIN] User not found: ${email}`);
       throw new APIError(400, "Email does not exist");
+    }
+
+    console.log(`[LOGIN] User found - ID: ${user._id}, Has password: ${!!user.password}`);
+    
+    // Check if password field exists
+    if (!user.password) {
+      console.log(`[LOGIN] No password field found for user: ${email}`);
+      throw new APIError(400, "Email or password is incorrect");
     }
 
     // Check password
     const isPasswordMatch = await bcrypt.compare(password, user.password);
+    console.log(`[LOGIN] Password match result: ${isPasswordMatch} for user: ${email}`);
+    
     if (!isPasswordMatch) {
       throw new APIError(400, "Email or password is incorrect");
     }
 
     // Verify account is active
     if (!user.isActive) {
+      console.log(`[LOGIN] Account inactive for user: ${email}`);
       throw new APIError(400, "Your account has been blocked");
     }
+
+    console.log(`[LOGIN] Login successful for: ${email}`);
 
     // Generate tokens
     const tokens = await createTokenPair({
