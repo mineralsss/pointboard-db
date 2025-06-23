@@ -244,7 +244,7 @@ class AuthService {
     }
 
     // Check password
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    const isPasswordMatch = await bcrypt.compare(user.password, password);
     console.log(`[LOGIN] Password match result: ${isPasswordMatch} for user: ${email}`);
     
     if (!isPasswordMatch) {
