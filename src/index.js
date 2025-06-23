@@ -31,6 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan("combined")); //theo dõi log GET, POST...
 // Routes
 app.use("/api/v1", require("./routes/index"));
+app.use("/api", require("./routes/index"));
 
 app.get("/", (req, res) => {
   res.json({ message: "Server is running!" });
