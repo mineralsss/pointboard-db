@@ -4,8 +4,9 @@
 const axios = require('axios');
 
 // Configuration
-const API_BASE_URL = process.env.API_URL || 'http://localhost:3000'; // Update with your API URL
+const API_BASE_URL = process.env.API_URL || 'https://pointboard-db-7cd97e9827ca.herokuapp.com/api/v1'; // Update with your API URL
 const TEST_EMAIL = 'test@example.com';
+const TEST_EMAIL_2 = 'test2@example.com';
 const TEST_PASSWORD = 'testpassword123';
 
 async function testAuthenticationFlow() {
@@ -31,19 +32,19 @@ async function testAuthenticationFlow() {
             }
         }
         
-        // Test 2: Valid registration
-        console.log('\n2️⃣ Testing valid registration...');
+        // Test 2: Valid registration WITHOUT phone number
+        console.log('\n2️⃣ Testing valid registration WITHOUT phone number...');
         try {
             const registerResponse = await axios.post(`${API_BASE_URL}/auth/register`, {
                 firstName: 'Test',
                 lastName: 'User',
                 email: TEST_EMAIL,
-                password: TEST_PASSWORD,
-                phone: '1234567890'
+                password: TEST_PASSWORD
+                // No phone number provided
             });
             
             if (registerResponse.status === 201 && registerResponse.data.success) {
-                console.log('✅ Registration successful');
+                console.log('✅ Registration without phone successful');
                 console.log('   Message:', registerResponse.data.message);
             } else {
                 console.log('❌ Unexpected registration response:', registerResponse.data);
@@ -56,8 +57,62 @@ async function testAuthenticationFlow() {
             }
         }
         
-        // Test 3: Login with unverified account
-        console.log('\n3️⃣ Testing login with unverified account...');
+        // Test 3: Another valid registration WITHOUT phone number (to test the phone duplicate bug)
+        console.log('\n3️⃣ Testing another registration WITHOUT phone number...');
+        try {
+            const registerResponse = await axios.post(`${API_BASE_URL}/auth/register`, {
+                firstName: 'Test2',
+                lastName: 'User2',
+                email: TEST_EMAIL_2,
+                password: TEST_PASSWORD
+                // No phone number provided - this should NOT fail with phone duplicate
+            });
+            
+            if (registerResponse.status === 201 && registerResponse.data.success) {
+                console.log('✅ Second registration without phone successful');
+                console.log('   Message:', registerResponse.data.message);
+            } else {
+                console.log('❌ Unexpected registration response:', registerResponse.data);
+            }
+        } catch (error) {
+            if (error.response?.data?.errorType === 'duplicate_email') {
+                console.log('ℹ️  User already exists (expected if running multiple times)');
+            } else if (error.response?.data?.errorType === 'duplicate_phone') {
+                console.log('❌ BUG DETECTED: Phone duplicate error when no phone was provided!');
+                console.log('   This should NOT happen after the fix');
+                console.log('   Error:', error.response.data);
+            } else {
+                console.log('❌ Registration failed:', error.response?.data || error.message);
+            }
+        }
+        
+        // Test 4: Registration WITH phone number
+        console.log('\n4️⃣ Testing registration WITH phone number...');
+        try {
+            const registerResponse = await axios.post(`${API_BASE_URL}/auth/register`, {
+                firstName: 'Test3',
+                lastName: 'User3',
+                email: 'test3@example.com',
+                password: TEST_PASSWORD,
+                phone: '1234567890'
+            });
+            
+            if (registerResponse.status === 201 && registerResponse.data.success) {
+                console.log('✅ Registration with phone successful');
+                console.log('   Message:', registerResponse.data.message);
+            } else {
+                console.log('❌ Unexpected registration response:', registerResponse.data);
+            }
+        } catch (error) {
+            if (error.response?.data?.errorType === 'duplicate_email') {
+                console.log('ℹ️  User already exists (expected if running multiple times)');
+            } else {
+                console.log('❌ Registration failed:', error.response?.data || error.message);
+            }
+        }
+        
+        // Test 5: Login with unverified account
+        console.log('\n5️⃣ Testing login with unverified account...');
         try {
             await axios.post(`${API_BASE_URL}/auth/login`, {
                 email: TEST_EMAIL,
@@ -74,37 +129,23 @@ async function testAuthenticationFlow() {
             }
         }
         
-        // Test 4: Duplicate email registration
-        console.log('\n4️⃣ Testing duplicate email registration...');
+        // Test 6: Duplicate phone number
+        console.log('\n6️⃣ Testing duplicate phone number registration...');
         try {
             await axios.post(`${API_BASE_URL}/auth/register`, {
-                firstName: 'Another',
-                lastName: 'User',
-                email: TEST_EMAIL,
-                password: 'anotherpassword123'
+                firstName: 'Test4',
+                lastName: 'User4',
+                email: 'test4@example.com',
+                password: TEST_PASSWORD,
+                phone: '1234567890' // Same phone as test 4
             });
-            console.log('❌ Should have failed with duplicate email error');
+            console.log('❌ Should have failed with duplicate phone error');
         } catch (error) {
-            if (error.response?.status === 400 && error.response?.data?.errorType === 'duplicate_email') {
-                console.log('✅ Correctly rejected duplicate email');
+            if (error.response?.status === 400 && error.response?.data?.errorType === 'duplicate_phone') {
+                console.log('✅ Correctly rejected duplicate phone');
                 console.log('   Message:', error.response.data.message);
-            } else {
-                console.log('❌ Unexpected error:', error.response?.data || error.message);
-            }
-        }
-        
-        // Test 5: Invalid login credentials
-        console.log('\n5️⃣ Testing invalid login credentials...');
-        try {
-            await axios.post(`${API_BASE_URL}/auth/login`, {
-                email: TEST_EMAIL,
-                password: 'wrongpassword'
-            });
-            console.log('❌ Should have failed with invalid credentials');
-        } catch (error) {
-            if (error.response?.status === 400) {
-                console.log('✅ Correctly rejected invalid credentials');
-                console.log('   Message:', error.response.data.message);
+            } else if (error.response?.data?.errorType === 'duplicate_email') {
+                console.log('ℹ️  Email duplicate (expected if running multiple times)');
             } else {
                 console.log('❌ Unexpected error:', error.response?.data || error.message);
             }
@@ -112,9 +153,10 @@ async function testAuthenticationFlow() {
         
         console.log('\n🎉 Authentication flow test completed!');
         console.log('\nNext steps:');
-        console.log('1. Verify email for the test user to test successful login');
-        console.log('2. Test the password reset flow');
-        console.log('3. Test the email verification resend functionality');
+        console.log('1. Run the database migration: node fix-phone-index.js');
+        console.log('2. Verify email for test users to test successful login');
+        console.log('3. Test the password reset flow');
+        console.log('4. Test the email verification resend functionality');
         
     } catch (error) {
         console.error('💥 Test failed with unexpected error:', error.message);

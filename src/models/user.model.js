@@ -18,10 +18,10 @@ const userSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-    },
-    phoneNumber: {
+    },    phoneNumber: {
       type: String,
       unique: true,
+      sparse: true, // This allows multiple documents with null/undefined phoneNumber
       trim: true,
     },
     address: {

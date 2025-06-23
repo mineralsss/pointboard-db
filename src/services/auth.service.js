@@ -160,11 +160,12 @@ class AuthService {
         };
       }
 
-      // Check for phone number duplicates if provided
-      if (userData.phoneNumber) {
-        const existingPhoneUser = await User.findOne({ phoneNumber: userData.phoneNumber });
+      // Check for phone number duplicates if provided and not empty
+      const phoneNumber = userData.phoneNumber || userData.phone;
+      if (phoneNumber && phoneNumber.trim() !== '') {
+        const existingPhoneUser = await User.findOne({ phoneNumber: phoneNumber });
         if (existingPhoneUser) {
-          console.log('Auth service - User already exists with phone:', userData.phoneNumber);
+          console.log('Auth service - User already exists with phone:', phoneNumber);
           return {
             success: false,
             errorType: 'duplicate_phone',
@@ -177,7 +178,6 @@ class AuthService {
       const userToCreate = {
         email: userData.email,
         password: await bcrypt.hash(userData.password, 10),
-        phoneNumber: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role || roles.STUDENT, // Default to student
@@ -185,6 +185,11 @@ class AuthService {
         dob: userData.dob,
         isVerified: false, // Start as unverified
       };
+
+      // Only add phoneNumber if it has a value
+      if (phoneNumber && phoneNumber.trim() !== '') {
+        userToCreate.phoneNumber = phoneNumber;
+      }
 
       console.log('Auth service - Creating user with prepared data');
 

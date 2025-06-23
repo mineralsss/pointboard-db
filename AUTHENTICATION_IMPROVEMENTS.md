@@ -12,12 +12,29 @@
 - **Solution**: Enhanced error handling with detailed logging and user-friendly messages
 - **Files Modified**: `src/controllers/auth.controller.js`, `src/services/auth.service.js`
 
-### 3. **Inconsistent Error Messages**
+### 3. **Phone Number Duplicate Error Bug**
+- **Problem**: Users without phone numbers were getting "phone number duplicate" errors
+- **Solution**: Fixed phoneNumber unique index to be sparse and improved validation logic
+- **Files Modified**: `src/models/user.model.js`, `src/services/auth.service.js`
+
+### 4. **Inconsistent Error Messages**
 - **Problem**: Error messages were not standardized and user-friendly
 - **Solution**: Implemented consistent error response format with `errorType` field
 - **Files Modified**: Multiple controller and service files
 
 ## 🔧 Key Changes Made
+
+### User Model (`src/models/user.model.js`)
+
+#### ✅ Fixed Phone Number Index
+```javascript
+phoneNumber: {
+  type: String,
+  unique: true,
+  sparse: true, // This allows multiple documents with null/undefined phoneNumber
+  trim: true,
+},
+```
 
 ### Authentication Service (`src/services/auth.service.js`)
 
@@ -26,6 +43,23 @@
 // Check if email is verified
 if (!user.isVerified) {
   throw new APIError(400, "Please verify your email address before logging in. Check your inbox for the verification link.");
+}
+```
+
+#### ✅ Enhanced Phone Number Validation
+```javascript
+// Check for phone number duplicates if provided and not empty
+const phoneNumber = userData.phoneNumber || userData.phone;
+if (phoneNumber && phoneNumber.trim() !== '') {
+  const existingPhoneUser = await User.findOne({ phoneNumber: phoneNumber });
+  if (existingPhoneUser) {
+    // Handle duplicate
+  }
+}
+
+// Only add phoneNumber if it has a value
+if (phoneNumber && phoneNumber.trim() !== '') {
+  userToCreate.phoneNumber = phoneNumber;
 }
 ```
 
@@ -63,29 +97,49 @@ All authentication endpoints now return consistent error responses:
 }
 ```
 
+## 🔄 Database Migration Required
+
+**IMPORTANT**: Run the database migration to fix the phoneNumber index:
+
+```bash
+node fix-phone-index.js
+```
+
+This script will:
+- Drop the existing non-sparse phoneNumber index
+- Create a new sparse unique index
+- Clean up existing null/undefined phoneNumber values
+
 ## 🧪 Testing
 
 ### Manual Testing Steps
 1. **Registration Flow**:
    - Test with missing required fields
-   - Test with valid data
+   - Test with valid data (with and without phone)
    - Test with duplicate email/phone
    - Verify email verification email is sent
 
-2. **Login Flow**:
+2. **Phone Number Bug Fix**:
+   - Register multiple users WITHOUT phone numbers (should succeed)
+   - Register users WITH duplicate phone numbers (should fail)
+   - Register users WITH unique phone numbers (should succeed)
+
+3. **Login Flow**:
    - Test with unverified account (should fail)
    - Test with wrong credentials
    - Test with verified account (should succeed)
 
-3. **Email Verification**:
+4. **Email Verification**:
    - Test verification link
    - Test resend verification
 
 ### Automated Test Script
-Run the provided test script:
+Run the enhanced test script:
 ```bash
 node test-auth.js
 ```
+
+The test now specifically checks for the phone number duplicate bug.
 
 ## 🔍 Debugging Features
 
@@ -99,6 +153,7 @@ node test-auth.js
 - User verification and activation status logged during login
 - Database operation success/failure logging
 - Email sending status tracking
+- Phone number validation logging
 
 ## 🎯 Expected Behavior
 
@@ -107,6 +162,7 @@ node test-auth.js
 - ✅ Returns 400 with specific error for duplicate email/phone
 - ✅ Returns 201 with success message for valid registration
 - ✅ Sends verification email automatically
+- ✅ **FIXED**: Multiple users can register without phone numbers
 
 ### Login
 - ✅ Returns 400 for missing email/password
@@ -114,6 +170,11 @@ node test-auth.js
 - ✅ Returns 400 for invalid credentials
 - ✅ Returns 400 for blocked users
 - ✅ Returns 200 with tokens for verified, active users
+
+### Phone Number Handling
+- ✅ **FIXED**: Users without phone numbers don't get duplicate errors
+- ✅ Users with duplicate phone numbers get proper error messages
+- ✅ Phone numbers are optional and handled correctly
 
 ### Error Messages
 - ✅ Clear, user-friendly messages
@@ -123,11 +184,13 @@ node test-auth.js
 
 ## 🚀 Next Steps
 
-1. **Test the improvements** using the provided test script
-2. **Verify email verification flow** end-to-end
-3. **Test password reset functionality**
-4. **Update frontend** to handle new error types and messages
-5. **Monitor logs** for any remaining issues
+1. **Run the database migration**: `node fix-phone-index.js`
+2. **Test the improvements** using the provided test script
+3. **Verify phone number handling** with and without phone numbers
+4. **Test email verification flow** end-to-end
+5. **Test password reset functionality**
+6. **Update frontend** to handle new error types and messages
+7. **Monitor logs** for any remaining issues
 
 ## 📝 Notes
 
@@ -136,6 +199,7 @@ node test-auth.js
 - Logging helps with debugging without exposing sensitive data
 - The `isVerified` check prevents unverified users from accessing the system
 - Email verification is required before users can log in
+- **Phone numbers are now truly optional** and won't cause duplicate errors
 
 ## 🔧 Configuration Requirements
 
@@ -151,5 +215,6 @@ Ensure these environment variables are set:
 2. **Email not sent**: Verify email service configuration
 3. **Login still allows unverified users**: Check if changes were deployed
 4. **Duplicate key errors**: Ensure proper unique indexes on email/phone
+5. **Phone duplicate errors for users without phone**: Run the database migration script
 
 All improvements are designed to provide a robust, user-friendly authentication experience while maintaining security best practices.
