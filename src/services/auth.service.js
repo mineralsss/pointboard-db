@@ -76,16 +76,13 @@ class AuthService {
   // Resend verification email
   resendVerificationEmail = async (email) => {
     try {
-      console.log(`Attempting to resend verification email to: ${email}`);
       const user = await User.findOne({ email }).select('+emailVerificationToken +emailVerificationExpires');
       
       if (!user) {
-        console.log(`User not found with email: ${email}`);
         throw new APIError(404, 'User not found');
       }
 
       if (user.isVerified) {
-        console.log(`Email already verified for user: ${email}`);
         throw new APIError(400, 'Email is already verified');
       }
 
@@ -94,7 +91,6 @@ class AuthService {
       const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
       // Update verification token
-      console.log(`Updating verification token for user: ${user._id}`);
       await User.findByIdAndUpdate(user._id, {
         emailVerificationToken: verificationToken,
         emailVerificationExpires: verificationExpires
@@ -102,17 +98,13 @@ class AuthService {
 
       // Create verification URL
       const verificationUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/verify-email/${verificationToken}`;
-      console.log(`Verification URL generated: ${verificationUrl}`);
 
       // Send verification email directly
-      console.log(`Sending verification email to: ${user.email}`);
       const result = await emailService.sendEmail(
         user.email,
         'Welcome to PointBoard - Verify Your Email',
         emailTemplates.welcomeEmail(`${user.firstName} ${user.lastName}`, verificationUrl)
       );
-      
-      console.log(`Email sending result: ${result.success ? 'succeeded' : 'failed'}`);
       
       if (!result.success) {
         console.error(`Failed to send verification email: ${result.error}`);
@@ -131,17 +123,8 @@ class AuthService {
 
   register = async (userData) => {
     try {
-      console.log('Auth service - register called with data:', {
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        hasPassword: !!userData.password,
-        phoneNumber: userData.phoneNumber
-      });
-
       // Validate essential fields
       if (!userData.email || !userData.password || !userData.firstName || !userData.lastName) {
-        console.error('Auth service - Missing required fields');
         return {
           success: false,
           errorType: 'validation_error',
@@ -152,7 +135,6 @@ class AuthService {
       // Check if user already exists
       const existingUser = await User.findOne({ email: userData.email });
       if (existingUser) {
-        console.log('Auth service - User already exists with email:', userData.email);
         return {
           success: false,
           errorType: 'duplicate_email',
@@ -165,7 +147,6 @@ class AuthService {
       if (phoneNumber && phoneNumber.trim() !== '') {
         const existingPhoneUser = await User.findOne({ phoneNumber: phoneNumber });
         if (existingPhoneUser) {
-          console.log('Auth service - User already exists with phone:', phoneNumber);
           return {
             success: false,
             errorType: 'duplicate_phone',
@@ -191,20 +172,14 @@ class AuthService {
         userToCreate.phoneNumber = phoneNumber;
       }
 
-      console.log('Auth service - Creating user with prepared data');
-
       // Create user with all required fields
       const user = await User.create(userToCreate);
-      console.log(`Auth service - User created successfully with ID: ${user._id}`);
       
       // Generate tokens
       const tokens = await createTokenPair({ userID: user._id });
-      console.log('Auth service - Tokens generated successfully');
       
       // Send verification email - do await to ensure it's sent
-      console.log(`Auth service - Sending verification email to ${user.email}`);
       const emailSent = await this.sendVerificationEmail(user);
-      console.log(`Auth service - Email sending status: ${emailSent ? 'succeeded' : 'failed'}`);
       
       return {
         success: true,
@@ -337,12 +312,10 @@ class AuthService {
   // Step 1: Send reset link to email
   requestPasswordReset = async (email) => {
     try {
-      console.log(`Password reset requested for email: ${email}`);
       // Find user by email
       const user = await User.findOne({ email });
       if (!user) {
         // Don't reveal if email exists or not for security
-        console.log(`No user found with email: ${email}`);
         return {
           success: true,
           message: "If an account with this email exists, a reset link has been sent."
@@ -363,7 +336,6 @@ class AuthService {
       const resetUrl = `${process.env.FRONTEND_URL || 'https://pointboard.vercel.app'}/reset-password/${resetToken}`;
 
       // Send reset link email
-      console.log(`Sending password reset link to: ${email}`);
       const result = await emailService.sendEmail(
         user.email,
         'Reset Your Password - PointBoard',
@@ -375,7 +347,6 @@ class AuthService {
         throw new APIError(500, 'Failed to send reset link. Please try again later.');
       }
 
-      console.log(`Password reset link sent successfully to: ${email}`);
       return {
         success: true,
         message: "Reset link sent to your email address."
@@ -389,12 +360,10 @@ class AuthService {
   // Step 1 Alternative: Send reset code to email (keeping for backward compatibility)
   requestPasswordResetWithCode = async (email) => {
     try {
-      console.log(`Password reset requested for email: ${email}`);
       // Find user by email
       const user = await User.findOne({ email });
       if (!user) {
         // Don't reveal if email exists or not for security
-        console.log(`No user found with email: ${email}`);
         return {
           success: true,
           message: "If an account with this email exists, a reset code has been sent."
@@ -412,7 +381,6 @@ class AuthService {
       });
 
       // Send reset code email
-      console.log(`Sending password reset code to: ${email}`);
       const result = await emailService.sendEmail(
         user.email,
         'Password Reset Code - PointBoard',
@@ -424,7 +392,6 @@ class AuthService {
         throw new APIError(500, 'Failed to send reset code. Please try again later.');
       }
 
-      console.log(`Password reset code sent successfully to: ${email}`);
       return {
         success: true,
         message: "Reset code sent to your email address."
@@ -463,7 +430,6 @@ class AuthService {
       });
 
       // Send confirmation email
-      console.log(`Sending password reset success email to: ${user.email}`);
       const result = await emailService.sendEmail(
         user.email,
         'Password Reset Successful - PointBoard',
@@ -473,8 +439,6 @@ class AuthService {
       if (!result.success) {
         console.error(`Failed to send password reset success email: ${result.error}`);
         // Continue despite email failure since password was reset
-      } else {
-        console.log(`Password reset success email sent to: ${user.email}`);
       }
 
       return {
@@ -519,7 +483,6 @@ class AuthService {
       });
 
       // Send confirmation email
-      console.log(`Sending password reset success email to: ${email}`);
       const result = await emailService.sendEmail(
         user.email,
         'Password Reset Successful - PointBoard',
@@ -529,8 +492,6 @@ class AuthService {
       if (!result.success) {
         console.error(`Failed to send password reset success email: ${result.error}`);
         // Continue despite email failure since password was reset
-      } else {
-        console.log(`Password reset success email sent to: ${email}`);
       }
 
       return {

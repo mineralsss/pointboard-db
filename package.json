@@ -1,14 +1,18 @@
 {
-  "name": "chotuananhne",
+  "name": "pointboard-db",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon src/index.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "PointBoard Backend API",
   "dependencies": {
     "@azure/identity": "^4.10.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",

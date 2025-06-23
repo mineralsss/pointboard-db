@@ -1,8 +1,7 @@
 const User = require("../models/user.model");
 
-class UserRepository {
-  async getByEmail(email) {
-    return await User.findOne({ email });
+class UserRepository {  async getByEmail(email) {
+    return await User.findOne({ email }).select('+password'); // Include password for authentication
   }
 
   async getAll(filter = {}, options = {}) {

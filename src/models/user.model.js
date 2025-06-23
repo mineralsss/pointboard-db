@@ -99,13 +99,14 @@ const userSchema = new Schema(
 userSchema.plugin(require("./plugins/toJSON.plugin"));
 userSchema.plugin(require("./plugins/paginate.plugin"));
 
-userSchema.pre("save", async function (next) {
-  const user = this;
-  if (user.isModified("password")) {
-    user.password = await bcrypt.hash(user.password, 8);
-  }
-  next();
-});
+// Note: Password hashing is now handled in the auth service
+// userSchema.pre("save", async function (next) {
+//   const user = this;
+//   if (user.isModified("password")) {
+//     user.password = await bcrypt.hash(user.password, 8);
+//   }
+//   next();
+// });
 
 const User = model("User", userSchema);
 module.exports = User;

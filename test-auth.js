@@ -4,9 +4,10 @@
 const axios = require('axios');
 
 // Configuration
-const API_BASE_URL = process.env.API_URL || 'https://pointboard-db-7cd97e9827ca.herokuapp.com/api/v1'; // Update with your API URL
-const TEST_EMAIL = 'test@example.com';
-const TEST_EMAIL_2 = 'test2@example.com';
+const API_BASE_URL = process.env.API_URL || 'http://localhost:3000/api/v1'; // Update with your API URL
+const timestamp = Date.now();
+const TEST_EMAIL = `test-${timestamp}@example.com`;
+const TEST_EMAIL_2 = `test2-${timestamp}@example.com`;
 const TEST_PASSWORD = 'testpassword123';
 
 async function testAuthenticationFlow() {

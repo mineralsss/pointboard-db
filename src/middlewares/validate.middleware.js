@@ -15,7 +15,14 @@ const validate = (schema) => (req, res, next) => {
     const errorMessage = error.details
       .map((details) => details.message)
       .join(", ");
-    return next(new APIError(400, errorMessage));
+    
+    // Return validation error in consistent format instead of throwing
+    return res.status(400).json({
+      success: false,
+      errorType: 'validation_error',
+      message: 'Validation failed',
+      errors: errorMessage
+    });
   }
 
   Object.assign(req, value);
