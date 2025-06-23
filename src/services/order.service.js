@@ -7,11 +7,16 @@ class OrderService {
   // Create a new order
   async createOrder(orderData, userId) {
     try {
+      console.log('[ORDER] Creating order for user:', userId);
+      console.log('[ORDER] Order data:', JSON.stringify(orderData, null, 2));
+      
       // Validate user exists
       const user = await User.findById(userId);
       if (!user) {
         throw new APIError(404, 'User not found');
       }
+      
+      console.log('[ORDER] User found:', user.email);
 
       // Calculate total amount
       const totalAmount = orderData.items.reduce((total, item) => {
@@ -25,7 +30,7 @@ class OrderService {
           firstName: orderData.customerInfo.firstName || user.firstName,
           lastName: orderData.customerInfo.lastName || user.lastName,
           email: orderData.customerInfo.email || user.email,
-          phone: orderData.customerInfo.phone || user.phone,
+          phone: orderData.customerInfo.phone || user.phoneNumber,
           address: orderData.customerInfo.address || user.address
         },
         items: orderData.items.map(item => ({
@@ -42,17 +47,19 @@ class OrderService {
         metadata: orderData.metadata || {}
       };
 
+      console.log('[ORDER] Saving order to database...');
       // Create order
       const order = new Order(orderPayload);
       await order.save();
+      
+      console.log('[ORDER] Order saved successfully:', order.orderRef);
 
-      // Send order confirmation email
-      try {
-        await this.sendOrderConfirmationEmail(order);
-      } catch (emailError) {
-        console.error('Failed to send order confirmation email:', emailError);
-        // Don't fail order creation if email fails
-      }
+      // Send order confirmation email asynchronously (don't wait)
+      setImmediate(() => {
+        this.sendOrderConfirmationEmail(order).catch(emailError => {
+          console.error('Failed to send order confirmation email:', emailError);
+        });
+      });
 
       return {
         success: true,
@@ -191,12 +198,12 @@ class OrderService {
         throw new APIError(404, 'Order not found');
       }
 
-      // Send payment confirmation email
-      try {
-        await this.sendPaymentConfirmationEmail(order);
-      } catch (emailError) {
-        console.error('Failed to send payment confirmation email:', emailError);
-      }
+      // Send payment confirmation email asynchronously (don't wait)
+      setImmediate(() => {
+        this.sendPaymentConfirmationEmail(order).catch(emailError => {
+          console.error('Failed to send payment confirmation email:', emailError);
+        });
+      });
 
       return order;
     } catch (error) {
