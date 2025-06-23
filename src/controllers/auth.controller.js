@@ -234,65 +234,6 @@ class AuthController {  register = catchAsync(async (req, res) => {
 
     return OK(res, result.message, { success: result.success });
   });
-
-  // New method: Reset password with token (from reset link)
-  resetPasswordWithToken = catchAsync(async (req, res) => {
-    const { token } = req.params;
-    const { newPassword } = req.body;
-
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: "Reset token is required",
-      });
-    }
-
-    if (!newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password is required",
-      });
-    }
-
-    try {
-      const result = await authService.resetPasswordWithToken({
-        token,
-        newPassword
-      });
-
-      return OK(res, result.message, { success: result.success });
-    } catch (error) {
-      console.error("Reset password with token error:", error);
-      
-      if (error instanceof APIError) {
-        return res.status(error.statusCode || 400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      return res.status(500).json({
-        success: false,
-        message: 'An unexpected error occurred. Please try again later.'
-      });
-    }
-  });
-
-  // Alternative method: Request password reset with code (keeping for backward compatibility)
-  requestPasswordResetWithCode = catchAsync(async (req, res) => {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    const result = await authService.requestPasswordResetWithCode(email);
-
-    return OK(res, result.message, { success: result.success });
-  });
 }
 
 module.exports = new AuthController();

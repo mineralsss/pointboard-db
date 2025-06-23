@@ -74,14 +74,6 @@ const userSchema = new Schema(
       type: Date,
       select: false,
     },
-    resetPasswordToken: {
-      type: String,
-      select: false, // Don't include in queries by default
-    },
-    resetPasswordTokenExpires: {
-      type: Date,
-      select: false,
-    },
     emailVerificationToken: {
       type: String,
       select: false, // Don't include in queries by default
