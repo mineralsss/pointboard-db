@@ -131,6 +131,48 @@ class AuthService {
 
   register = async (userData) => {
     try {
+      console.log('Auth service - register called with data:', {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        hasPassword: !!userData.password,
+        phoneNumber: userData.phoneNumber
+      });
+
+      // Validate essential fields
+      if (!userData.email || !userData.password || !userData.firstName || !userData.lastName) {
+        console.error('Auth service - Missing required fields');
+        return {
+          success: false,
+          errorType: 'validation_error',
+          message: 'Missing required fields'
+        };
+      }
+
+      // Check if user already exists
+      const existingUser = await User.findOne({ email: userData.email });
+      if (existingUser) {
+        console.log('Auth service - User already exists with email:', userData.email);
+        return {
+          success: false,
+          errorType: 'duplicate_email',
+          message: 'This email address is already registered'
+        };
+      }
+
+      // Check for phone number duplicates if provided
+      if (userData.phoneNumber) {
+        const existingPhoneUser = await User.findOne({ phoneNumber: userData.phoneNumber });
+        if (existingPhoneUser) {
+          console.log('Auth service - User already exists with phone:', userData.phoneNumber);
+          return {
+            success: false,
+            errorType: 'duplicate_phone',
+            message: 'This phone number is already registered'
+          };
+        }
+      }
+
       // Prepare user data
       const userToCreate = {
         email: userData.email,
@@ -144,23 +186,20 @@ class AuthService {
         isVerified: false, // Start as unverified
       };
 
-      console.log('Creating user with data:', {
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName
-      });
+      console.log('Auth service - Creating user with prepared data');
 
       // Create user with all required fields
       const user = await User.create(userToCreate);
-      console.log(`User created with ID: ${user._id}`);
+      console.log(`Auth service - User created successfully with ID: ${user._id}`);
       
       // Generate tokens
       const tokens = await createTokenPair({ userID: user._id });
+      console.log('Auth service - Tokens generated successfully');
       
       // Send verification email - do await to ensure it's sent
-      console.log(`Sending verification email to ${user.email}`);
+      console.log(`Auth service - Sending verification email to ${user.email}`);
       const emailSent = await this.sendVerificationEmail(user);
-      console.log(`Email sending status: ${emailSent ? 'succeeded' : 'failed'}`);
+      console.log(`Auth service - Email sending status: ${emailSent ? 'succeeded' : 'failed'}`);
       
       return {
         success: true,
@@ -175,8 +214,11 @@ class AuthService {
         message: 'Registration successful. Please check your email to verify your account.'
       };
     } catch (error) {
+      console.error('Auth service - Registration error:', error);
+      
       // Handle MongoDB duplicate key errors explicitly
       if (error.code === 11000) {
+        console.error('Auth service - Duplicate key error details:', error.keyPattern, error.keyValue);
         const keyPattern = error.keyPattern;
         
         if (keyPattern.email) {
@@ -187,7 +229,7 @@ class AuthService {
           };
         }
         
-        if (keyPattern.phone) {
+        if (keyPattern.phoneNumber) {
           return {
             success: false,
             errorType: 'duplicate_phone',
@@ -195,18 +237,17 @@ class AuthService {
           };
         }
         
-        // Replace generic message with phone number specific message
-        // This assumes most duplicates are likely phone numbers if not caught above
+        // Generic duplicate error
         return {
           success: false,
-          errorType: 'duplicate_phone',
-          message: 'This phone number is already registered'
+          errorType: 'duplicate_field',
+          message: 'This information is already registered'
         };
       }
       
       // Handle validation errors
       if (error.name === 'ValidationError') {
-        console.log('Validation error details:', error.errors);
+        console.error('Auth service - Validation error details:', error.errors);
         
         // Return user-friendly error messages
         return {
@@ -221,6 +262,7 @@ class AuthService {
         };
       }
       
+      console.error('Auth service - Unexpected error during registration:', error);
       throw error; // Pass other errors to the controller
     }
   };
@@ -241,6 +283,11 @@ class AuthService {
     // Verify account is active
     if (!user.isActive) {
       throw new APIError(400, "Your account has been blocked");
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      throw new APIError(400, "Please verify your email address before logging in. Check your inbox for the verification link.");
     }
 
     // Generate tokens

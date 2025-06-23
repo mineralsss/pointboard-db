@@ -5,12 +5,24 @@ const catchAsync = require("../utils/catchAsync");
 const userEvents = require('../events/userEvents');
 const APIError = require("../utils/APIError"); // ADD THIS LINE
 
-class AuthController {
-  register = catchAsync(async (req, res) => {
-    // Log the received request body
-    console.log('Registration request received with body:', JSON.stringify(req.body, null, 2));
+class AuthController {  register = catchAsync(async (req, res) => {
+    // Log the received request body (without password for security)
+    const logBody = { ...req.body };
+    delete logBody.password;
+    console.log('Registration request received with body:', JSON.stringify(logBody, null, 2));
+    console.log('Password provided:', req.body.password ? 'Yes' : 'No');
     
     try {
+      // Validate required fields early
+      if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.password) {
+        console.error('Missing required fields');
+        return res.status(400).json({
+          success: false,
+          errorType: 'validation_error',
+          message: 'Missing required fields: firstName, lastName, email, and password are required'
+        });
+      }
+
       // Prepare user data for the service
       const userData = {
         firstName: req.body.firstName,
@@ -23,13 +35,18 @@ class AuthController {
         role: req.body.role || 'student' // Default to student role
       };
       
+      console.log('Calling auth service with prepared data...');
+      
       // Call the auth service to register user
       const result = await authService.register(userData);
       
       // Check for success
       if (!result.success) {
+        console.error('Auth service returned error:', result);
         return res.status(400).json(result);
       }
+      
+      console.log('Registration successful, returning response');
       
       // Return created response - don't wait for email success
       return CREATED(
@@ -42,7 +59,8 @@ class AuthController {
       );
     } catch (error) {
       // Log detailed error info
-      console.error('Registration error:', error.message);
+      console.error('Registration error caught in controller:', error.message);
+      console.error('Error stack:', error.stack);
       
       // Check for MongoDB duplicate key error
       if (error.code === 11000) {
@@ -85,14 +103,30 @@ class AuthController {
         message: 'An error occurred during registration'
       });
     }
-  });
-
-  login = catchAsync(async (req, res) => {
+  });  login = catchAsync(async (req, res) => {
     try {
       console.log('Login attempt for:', req.body.email);
+      console.log('Password provided:', req.body.password ? 'Yes' : 'No');
+      
+      // Validate required fields
+      if (!req.body.email || !req.body.password) {
+        return res.status(400).json({
+          success: false,
+          errorType: 'validation_error',
+          message: 'Email and password are required'
+        });
+      }
+      
+      // Add debug check for user existence and status
+      const debugUser = await User.findOne({ email: req.body.email });
+      if (debugUser) {
+        console.log('User found - isVerified:', debugUser.isVerified, 'isActive:', debugUser.isActive);
+      } else {
+        console.log('No user found with this email');
+      }
       
       const result = await authService.loginWithEmail(req.body);
-      console.log('Login result:', result);
+      console.log('Login successful for user:', req.body.email);
       
       // Make sure the response format matches frontend expectations
       return OK(res, "Login successful", {
@@ -102,9 +136,19 @@ class AuthController {
         userData: result.userData
       });
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login error for", req.body.email, ":", error.message);
       
       if (error instanceof APIError) {
+        // Check if it's an unverified user error to provide specific message
+        if (error.message.includes('verify your email')) {
+          return res.status(400).json({
+            success: false,
+            errorType: 'email_not_verified',
+            message: error.message,
+            canResendVerification: true // Flag to show resend verification option
+          });
+        }
+        
         return res.status(error.statusCode || 400).json({
           success: false,
           message: error.message
