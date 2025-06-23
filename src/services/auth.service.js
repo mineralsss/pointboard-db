@@ -135,7 +135,7 @@ class AuthService {
       const userToCreate = {
         email: userData.email,
         password:userData.password,
-        phone: userData.phoneNumber || userData.phone, // Accept either field name
+        phoneNumber: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role || roles.STUDENT, // Default to student
