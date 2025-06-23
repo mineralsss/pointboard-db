@@ -87,56 +87,7 @@ The PointBoard Team
   `;
 };
 
-// Modified registration function with better error handling
-exports.register = async (req, res) => {
-  try {
-    // Your existing registration logic
-    const { name, email, password } = req.body;
-    
-    // Create user in database
-    const user = await User.create({
-      name,
-      email,
-      password
-      // other user fields
-    });
-    
-    // Optional: Generate verification token
-    const verificationToken = user.generateVerificationToken(); // If you have this method
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    
-    // Try to send welcome email but don't block registration if it fails
-    try {
-      await emailService.sendEmail(
-        email,
-        'Welcome to PointBoard!',
-        emailTemplates.welcomeEmail(name, verificationUrl)
-      );
-      console.log(`Welcome email sent to ${email}`);
-    } catch (emailError) {
-      console.error('Failed to send welcome email:', emailError);
-      // Continue with registration process even if email fails
-    }
-    
-    // Return response to client
-    return res.status(201).json({
-      success: true,
-      message: 'Registration successful!',
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Registration failed',
-      error: error.message
-    });
-  }
-};
+
 
 /**
  * Generates HTML content for password reset email
@@ -152,14 +103,54 @@ exports.passwordResetEmail = (name, resetUrl) => {
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
     .header { background-color: #4c1275; color: white; padding: 15px; text-align: center; }
     .content { padding: 20px; }
-    .button { display: inline-block; background-color: #4c1275; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
-    .note { background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-size: 0.9em; }
-    .footer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+    .button { 
+      display: inline-block; 
+      background-color: #4c1275; 
+      color: white; 
+      padding: 12px 24px; 
+      text-decoration: none; 
+      border-radius: 4px; 
+      font-weight: bold;
+      margin: 20px 0;
+    }
+    .button:hover { background-color: #6d2a9d; }
+    .note { 
+      background-color: #f8f9fa; 
+      padding: 15px; 
+      border-radius: 4px; 
+      margin-top: 20px; 
+      font-size: 0.9em; 
+      border-left: 4px solid #4c1275;
+    }
+    .footer { 
+      font-size: 12px; 
+      color: #777; 
+      text-align: center; 
+      margin-top: 30px; 
+      padding-top: 20px; 
+      border-top: 1px solid #eee; 
+    }
+    .url-fallback { 
+      background-color: #f8f9fa; 
+      padding: 10px; 
+      border-radius: 4px; 
+      margin-top: 15px; 
+      word-break: break-all; 
+      font-size: 0.85em; 
+      color: #666;
+    }
+    @media only screen and (max-width: 600px) {
+      .container { padding: 10px; }
+      .content { padding: 15px; }
+      .button { display: block; width: 90%; text-align: center; margin: 20px auto; }
+    }
   </style>
 </head>
 <body>
@@ -175,8 +166,12 @@ exports.passwordResetEmail = (name, resetUrl) => {
         <a href="${resetUrl}" class="button">Reset Password</a>
       </p>
       <div class="note">
-        <p>This link is valid for 1 hour. If you didn't request this password reset, please ignore this email or contact support if you have concerns.</p>
+        <p><strong>Important:</strong> This link is valid for 1 hour. After that, you'll need to request a new password reset.</p>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <div class="url-fallback">${resetUrl}</div>
       </div>
+      <p>If you didn't request this password reset, please ignore this email or contact our support team if you have concerns about your account security.</p>
+      <p>Best regards,<br>The PointBoard Team</p>
     </div>
     <div class="footer">
       <p>© ${new Date().getFullYear()} PointBoard. All rights reserved.</p>

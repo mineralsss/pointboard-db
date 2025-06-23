@@ -21,6 +21,19 @@ router.post(
 router.post('/forgot-password', authController.requestPasswordReset);
 router.post('/reset-password', authController.resetPassword);
 
+// New route: Reset password with token (from reset link)
+router.post('/reset-password/:token', 
+  validate(authValidation.resetPasswordWithToken), 
+  authController.resetPasswordWithToken
+);
+
+// Alternative routes for backward compatibility with reset codes
+router.post('/forgot-password-code', authController.requestPasswordResetWithCode);
+router.post('/reset-password-code', 
+  validate(authValidation.resetPasswordWithCode), 
+  authController.resetPassword
+);
+
 // Email verification routes
 router.get('/verify-email/:token', authController.verifyEmail);
 router.post('/resend-verification', authController.resendVerificationEmail);

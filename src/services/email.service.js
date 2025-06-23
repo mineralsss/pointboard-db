@@ -54,22 +54,25 @@ class EmailService {
         }
       };
       
-      // TRUE non-blocking send - fire and forget
-      // Don't wait for the response at all
-      sgMail.send(msg)
-        .then(() => {
-          const endTime = Date.now();
-          console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
-        })
-        .catch((error) => {
-          const endTime = Date.now();
-          console.error(`Error sending email to ${to} (${endTime - startTime}ms):`, error);
-        });
+      // Use the reliable approach - waiting for the actual send
+      await sgMail.send(msg);
       
-      // Return immediately without waiting
-      return { success: true, message: 'Email sending initiated' };
+      const endTime = Date.now();
+      console.log(`Email sent successfully to ${to} in ${endTime - startTime}ms`);
+      return { success: true };
     } catch (error) {
-      console.error(`Error preparing email to ${to}:`, error);
+      const endTime = Date.now();
+      console.error(`Error sending email to ${to} (${endTime - startTime}ms):`, error);
+      
+      // Detailed error logging
+      if (error.response) {
+        console.error('SendGrid API error details:', {
+          statusCode: error.response.statusCode,
+          body: error.response.body,
+          headers: error.response.headers
+        });
+      }
+      
       return { success: false, error: error.message };
     }
   }

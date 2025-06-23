@@ -43,10 +43,31 @@ const resetPassword = {
   }),
 };
 
+// New validation for reset password with token from URL params
+const resetPasswordWithToken = {
+  params: Joi.object().keys({
+    token: Joi.string().required(),
+  }),
+  body: Joi.object().keys({
+    newPassword: Joi.string().min(6).required(),
+  }),
+};
+
+// Validation for reset password with code (backward compatibility)
+const resetPasswordWithCode = {
+  body: Joi.object().keys({
+    email: Joi.string().email().required(),
+    resetCode: Joi.string().length(6).required(),
+    newPassword: Joi.string().min(6).required(),
+  }),
+};
+
 module.exports = {
   register,
   login,
   refreshTokens,
   forgotPassword,
   resetPassword,
+  resetPasswordWithToken,
+  resetPasswordWithCode,
 };
