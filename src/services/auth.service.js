@@ -134,7 +134,7 @@ class AuthService {
       // Prepare user data
       const userToCreate = {
         email: userData.email,
-        password: await bcrypt.hash(userData.password, 10),
+        password:userData.password,
         phone: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -244,7 +244,9 @@ class AuthService {
     }
 
     // Check password
-    const isPasswordMatch = await bcrypt.compare(user.password, password);
+    console.log(user.password);
+    const isPasswordMatch = await bcrypt.compareSync(password, user.password);
+    
     console.log(`[LOGIN] Password match result: ${isPasswordMatch} for user: ${email}`);
     
     if (!isPasswordMatch) {
@@ -418,7 +420,7 @@ class AuthService {
       }
 
       // Hash new password and clear reset fields
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const hashedPassword = await bcrypt.hashSync(newPassword, 10);
       
       await User.findByIdAndUpdate(user._id, {
         password: hashedPassword,
@@ -474,7 +476,7 @@ class AuthService {
       }
 
       // Hash new password and clear reset fields
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const hashedPassword = await bcrypt.hashSync(newPassword, 10);
       
       await User.findByIdAndUpdate(user._id, {
         password: hashedPassword,

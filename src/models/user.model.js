@@ -19,7 +19,7 @@ const userSchema = new Schema(
       unique: true,
       trim: true,
     },
-    phone: {
+    phoneNumber: {
       type: String,
       unique: true,
       trim: true,
@@ -102,7 +102,7 @@ userSchema.plugin(require("./plugins/paginate.plugin"));
 userSchema.pre("save", async function (next) {
   const user = this;
   if (user.isModified("password")) {
-    user.password = await bcrypt.hash(user.password, 8);
+    user.password = await bcrypt.hash(user.password, 10);
   }
   next();
 });
