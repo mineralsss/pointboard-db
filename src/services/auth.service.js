@@ -135,7 +135,7 @@ class AuthService {
       const userToCreate = {
         email: userData.email,
         password: await bcrypt.hash(userData.password, 10),
-        phone: userData.phoneNumber || userData.phone, // Accept either field name
+        phoneNumber: userData.phoneNumber || userData.phone, // Accept either field name
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role || roles.STUDENT, // Default to student
@@ -168,7 +168,7 @@ class AuthService {
           id: user._id,
           name: user.name || `${user.firstName} ${user.lastName}`,
           email: user.email,
-          phoneNumber: user.phone
+          phoneNumber: user.phoneNumber
         },
         tokens,
         emailSent,

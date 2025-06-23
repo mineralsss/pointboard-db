@@ -1,5 +1,6 @@
 const path = require('path');
 const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
+const orderService = require('../services/order.service');
 
 // Middleware to verify SePay IP
 const isSePayIP = (ip) => {
@@ -45,6 +46,28 @@ exports.sePayWebhook = async (req, res) => {
         orderRef = orderRefMatch[1];
       }
     }
+
+    // If order reference found, update order payment status
+    if (orderRef) {
+      try {
+        console.log(`Updating payment status for order: ${orderRef}`);
+        
+        const paymentData = {
+          paymentId: req.body.id,
+          gateway: req.body.gateway,
+          transactionDate: req.body.transactionDate,
+          transferAmount: req.body.transferAmount,
+          referenceCode: req.body.referenceCode,
+          description: req.body.description || req.body.content
+        };
+
+        await orderService.updatePaymentStatus(orderRef, paymentData);
+        console.log(`Payment status updated successfully for order: ${orderRef}`);
+      } catch (orderError) {
+        console.error(`Failed to update order payment status for ${orderRef}:`, orderError);
+        // Don't fail the webhook if order update fails
+      }
+    }
     
     return res.status(200).json({ 
       success: true, 
@@ -62,12 +85,39 @@ exports.sePayWebhook = async (req, res) => {
 
 exports.verifyPayment = async (req, res) => {
   try {
-    // Implementation details...
-    return res.status(200).json({
-      success: true,
-      verified: false,
-      message: "Verification endpoint"
-    });
+    const { orderRef } = req.params;
+    
+    if (!orderRef) {
+      return res.status(400).json({
+        success: false,
+        message: "Order reference is required"
+      });
+    }
+
+    // Check if order exists and get its payment status
+    try {
+      const order = await orderService.getOrderByRef(orderRef);
+      
+      return res.status(200).json({
+        success: true,
+        verified: order.paymentStatus === 'paid',
+        order: {
+          orderRef: order.orderRef,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          totalAmount: order.totalAmount,
+          currency: order.currency
+        },
+        message: order.paymentStatus === 'paid' ? 'Payment verified' : 'Payment pending'
+      });
+    } catch (orderError) {
+      console.log(`Order not found for reference: ${orderRef}`);
+      return res.status(404).json({
+        success: false,
+        verified: false,
+        message: "Order not found"
+      });
+    }
   } catch (error) {
     console.error("Error:", error);
     return res.status(200).json({
