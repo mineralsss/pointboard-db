@@ -168,7 +168,7 @@ class AuthService {
           id: user._id,
           name: user.name || `${user.firstName} ${user.lastName}`,
           email: user.email,
-          phoneNumber: user.phone
+          phoneNumber: user.phone || user.phoneNumber,
         },
         tokens,
         emailSent,
@@ -187,7 +187,7 @@ class AuthService {
           };
         }
         
-        if (keyPattern.phone) {
+        if (keyPattern.phoneNumber) {
           return {
             success: false,
             errorType: 'duplicate_phone',
