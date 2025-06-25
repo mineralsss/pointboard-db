@@ -37,19 +37,20 @@ export default async function handler(req, res) {
     const transactions = database.collection('transactions');
     const payload = req.body;
     
-    // Extract order reference from content if possible
-    let orderRef = null;
+    // Extract order number from content if possible
+    let orderNumber = null;
     if (payload.content) {
-      const match = payload.content.match(/PointBoard-?([A-Z0-9]+)/i);
+      // Match POINTBOARD format: POINTBOARDA247872
+      const match = payload.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
       if (match) {
-        orderRef = match[1];
+        orderNumber = `POINTBOARD${match[1]}`; // Include full POINTBOARD prefix
       }
     }
     
     // Store transaction record
     await transactions.insertOne({
       transactionId: payload.id,
-      orderRef: orderRef,
+      orderNumber: orderNumber,
       gateway: payload.gateway,
       amount: payload.transferAmount,
       content: payload.content,
@@ -58,11 +59,11 @@ export default async function handler(req, res) {
       rawData: payload
     });
     
-    // If orderRef was found, update order status
-    if (orderRef) {
+    // If orderNumber was found, update order status
+    if (orderNumber) {
       const orders = database.collection('orders');
       await orders.updateOne(
-        { orderRef: orderRef },
+        { orderNumber: orderNumber },
         { 
           $set: { 
             paymentStatus: 'paid',

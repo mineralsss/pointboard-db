@@ -37,18 +37,19 @@ exports.sePayWebhook = async (req, res) => {
       // Still continue to respond to the webhook
     }
     
-    // Extract order reference from content if present
-    let orderRef = null;
+    // Extract order number from content if present
+    let orderNumber = null;
     if (req.body.content) {
-      const orderRefMatch = req.body.content.match(/PointBoard-?([A-Z0-9]+)/i);
-      if (orderRefMatch) {
-        orderRef = orderRefMatch[1];
+      // Match POINTBOARD format: POINTBOARDA247872
+      const orderNumberMatch = req.body.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
+      if (orderNumberMatch) {
+        orderNumber = `POINTBOARD${orderNumberMatch[1]}`; // Include full POINTBOARD prefix
       }
     }
     
     return res.status(200).json({ 
       success: true, 
-      orderRef: orderRef,
+      orderNumber: orderNumber,
       message: 'Payment notification received' 
     });
   } catch (error) {

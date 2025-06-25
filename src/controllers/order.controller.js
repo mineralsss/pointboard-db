@@ -7,9 +7,14 @@ const catchAsync = require(path.resolve(__dirname, '../utils/catchAsync.js'));
  * Generate unique order number
  */
 const generateOrderNumber = async () => {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `ORD-${timestamp}-${random}`;
+  // Generate random letter (A-Z)
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
+  
+  // Generate random 6-digit number
+  const randomNumber = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+  
+  return `POINTBOARD${randomLetter}${randomNumber}`;
 };
 
 /**
