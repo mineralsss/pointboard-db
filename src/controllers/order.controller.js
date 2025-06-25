@@ -87,13 +87,16 @@ const getOrderById = catchAsync(async (req, res) => {
  * Get user's orders
  */
 const getUserOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, sort = '-createdAt' } = req.query;
+  const { page = 1, limit = 10 } = req.query;
   
   const options = {
     page: parseInt(page),
     limit: parseInt(limit),
-    sort,
-    populate: 'user',
+    sort: '-createdAt', // Always sort by newest first (descending order)
+    populate: {
+      path: 'user',
+      select: 'firstName lastName email'
+    },
   };
   
   const filter = { user: req.user.id };
@@ -195,13 +198,16 @@ const cancelOrder = catchAsync(async (req, res) => {
  * Get all orders (admin only)
  */
 const getAllOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, sort = '-createdAt', status } = req.query;
+  const { page = 1, limit = 10, status } = req.query;
   
   const options = {
     page: parseInt(page),
     limit: parseInt(limit),
-    sort,
-    populate: 'user',
+    sort: '-createdAt', // Always sort by newest first (descending order)
+    populate: {
+      path: 'user',
+      select: 'firstName lastName email'
+    },
   };
   
   const filter = {};

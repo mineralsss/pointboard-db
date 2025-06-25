@@ -122,7 +122,7 @@ app.post("/api/transaction", async (req, res) => {
 // GET all users
 app.get('/api/v1/allusers', async (req, res) => {
   try {
-    const users = await User.find({});
+    const users = await User.find({}).sort('-createdAt'); // Sort by newest first
     res.status(200).json({ success: true, users });
   } catch (error) {
     console.error('Error fetching users:', error);
