@@ -87,16 +87,13 @@ const getOrderById = catchAsync(async (req, res) => {
  * Get user's orders
  */
 const getUserOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, sortBy = 'createdAt:desc' } = req.query;
   
   const options = {
     page: parseInt(page),
     limit: parseInt(limit),
-    sort: '-createdAt', // Always sort by newest first (descending order)
-    populate: {
-      path: 'user',
-      select: 'firstName lastName email'
-    },
+    sortBy, // Use paginate plugin's sortBy format: 'field:order'
+    populate: 'user', // Use string format for populate
   };
   
   const filter = { user: req.user.id };
@@ -198,16 +195,13 @@ const cancelOrder = catchAsync(async (req, res) => {
  * Get all orders (admin only)
  */
 const getAllOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, status } = req.query;
+  const { page = 1, limit = 10, status, sortBy = 'createdAt:desc' } = req.query;
   
   const options = {
     page: parseInt(page),
     limit: parseInt(limit),
-    sort: '-createdAt', // Always sort by newest first (descending order)
-    populate: {
-      path: 'user',
-      select: 'firstName lastName email'
-    },
+    sortBy, // Use paginate plugin's sortBy format: 'field:order'
+    populate: 'user', // Use string format for populate
   };
   
   const filter = {};
