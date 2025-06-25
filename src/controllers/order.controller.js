@@ -104,28 +104,52 @@ const getUserOrders = catchAsync(async (req, res) => {
  * Update order status (admin only)
  */
 const updateOrderStatus = catchAsync(async (req, res) => {
-  const { orderStatus, paymentStatus } = req.body;
+  const { orderStatus, paymentStatus, status } = req.body;
   const { orderId } = req.params;
+  
+  console.log('updateOrderStatus called with:', { orderId, orderStatus, paymentStatus, status });
   
   const order = await Order.findById(orderId);
   
   if (!order) {
+    console.log('Order not found for ID:', orderId);
     throw new APIError(404, 'Order not found');
   }
   
+  console.log('Found order:', order._id);
+  console.log('Current order status before update:', order.orderStatus);
+  
+  // Handle both 'orderStatus' and 'status' fields
   if (orderStatus) {
+    console.log('Updating orderStatus with:', orderStatus);
     order.orderStatus = orderStatus;
+  } else if (status) {
+    console.log('Updating orderStatus with status field:', status);
+    order.orderStatus = status;
   }
   
   if (paymentStatus) {
+    console.log('Updating paymentStatus with:', paymentStatus);
     order.paymentStatus = paymentStatus;
   }
   
-  await order.save();
+  console.log('Order status after assignment, before save:', order.orderStatus);
+  console.log('Order modified paths:', order.modifiedPaths());
+  console.log('Order isModified:', order.isModified());
+  
+  const savedOrder = await order.save();
+  
+  console.log('Order saved successfully');
+  console.log('Saved order status:', savedOrder.orderStatus);
+  console.log('Saved order ID:', savedOrder._id);
+  
+  // Double-check by fetching from database again
+  const verifyOrder = await Order.findById(orderId);
+  console.log('Verification - order status in DB:', verifyOrder.orderStatus);
   
   res.status(200).json({
     success: true,
-    data: order,
+    data: savedOrder,
     message: 'Order status updated successfully',
   });
 });

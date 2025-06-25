@@ -36,6 +36,7 @@ const updateOrderStatus = {
   body: Joi.object().keys({
     orderStatus: Joi.string().valid('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'),
     paymentStatus: Joi.string().valid('pending', 'processing', 'completed', 'failed', 'refunded'),
+    status: Joi.string().valid('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'), // Add support for 'status' field
   }).min(1),
 };
 

@@ -6,6 +6,9 @@ const morgan = require("morgan");
 const mongoose = require("mongoose");
 const http = require("http");
 const Transaction = require('./models/transaction.model');
+const Order = require('./models/order.model');
+const User = require('./models/user.model');
+const { errorConverter, errorHandler } = require('./middlewares/error.middleware');
 
 const app = express();
 
@@ -116,6 +119,17 @@ app.post("/api/transaction", async (req, res) => {
   }
 });
 
+// GET all users
+app.get('/api/v1/allusers', async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.status(200).json({ success: true, users });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
 // Backend endpoint for checking transaction status
 app.get('/api/transactions/:transactionId/status', async (req, res) => {
   try {
@@ -222,19 +236,12 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
-});
+app.use(errorConverter);
+app.use(errorHandler);
 
-// 404 handler
-app.use("/{*any}", (req, res) => {
+// 404 handler for undefined routes
+app.use((req, res) => {
   console.log(`Route not found: ${req.method} ${req.originalUrl}`);
-  res.status(404).json({ error: "Route not found" });
-});
-
-// Put this AFTER all your other routes, just before starting the server
-app.use("*notFound", (req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
