@@ -184,8 +184,6 @@ app.get('/api/transactions/:transactionId/status', async (req, res) => {
   }
 });
 
-// Add this endpoint to your Express app in index.js or routes file
-
 /**
  * Endpoint to verify if a transaction exists and check its status
  */
@@ -204,16 +202,53 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       });
     }
 
+    // If not found, try regex match in content (case-insensitive)
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        content: { $regex: transactionId, $options: 'i' }
+      });
+    }
+
     if (!transaction) {
       console.log(`[VERIFY] No transaction found for: ${transactionId}`);
+      
+      // Check if transactionId matches POINTBOARD format
+      if (transactionId.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+        console.log(`[VERIFY] Creating stub transaction for: ${transactionId}`);
+        
+        // Create a stub transaction for pending payment
+        const stubTransaction = new Transaction({
+          gateway: 'sepay',
+          transactionDate: new Date().toISOString(),
+          accountNumber: 'pending',
+          transferType: 'in',
+          description: `Pending payment for ${transactionId}`,
+          transferAmount: 0,
+          referenceCode: transactionId.toUpperCase(),
+          status: 'pending'
+        });
+        
+        await stubTransaction.save();
+        console.log(`[VERIFY] Stub transaction created for: ${transactionId}`);
+        
+        return res.status(200).json({
+          exists: true,
+          status: 'pending',
+          transactionId: transactionId,
+          amount: 0,
+          description: `Pending payment for ${transactionId}`,
+          isStub: true
+        });
+      }
+      
       return res.status(200).json({
         exists: false,
         status: 'not_found'
       });
     }
 
-    // Update the transaction status to 'verified' if not already
-    if (transaction.status !== 'received') {
+    // Update the transaction status to 'received' if not already
+    if (transaction.status !== 'received' && transaction.status !== 'completed' && transaction.status !== 'success') {
       transaction.status = 'received';
       await transaction.save();
       console.log(`[VERIFY] Transaction ${transactionId} status updated to 'received'`);
@@ -224,12 +259,202 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       status: transaction.status,
       transactionId: transaction.referenceCode,
       amount: transaction.transferAmount,
-      description: transaction.content
+      description: transaction.content || transaction.description,
+      isStub: false
     });
   } catch (error) {
+    console.error('[VERIFY] Error:', error);
     return res.status(500).json({
       exists: false,
       status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// Create order from transaction reference
+app.post('/api/orders/from-transaction/:transactionId', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { items, totalAmount, shippingAddress, notes } = req.body;
+    
+    console.log(`[CREATE ORDER] Creating order from transaction: ${transactionId}`);
+    
+    // Find the transaction
+    let transaction = await Transaction.findOne({ referenceCode: transactionId });
+    
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        content: { $regex: transactionId, $options: 'i' }
+      });
+    }
+    
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        description: { $regex: transactionId, $options: 'i' }
+      });
+    }
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+    
+    // Extract order number
+    let orderNumber = transactionId.toUpperCase();
+    if (!orderNumber.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+      // Extract from transaction if not in correct format
+      if (transaction.referenceCode && transaction.referenceCode.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+        orderNumber = transaction.referenceCode.toUpperCase();
+      } else if (transaction.content) {
+        const match = transaction.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (match) {
+          orderNumber = `POINTBOARD${match[1]}`;
+        }
+      }
+    }
+    
+    // Check if order already exists
+    const existingOrder = await Order.findOne({ orderNumber });
+    if (existingOrder) {
+      return res.status(200).json({
+        success: true,
+        data: existingOrder,
+        message: 'Order already exists'
+      });
+    }
+    
+    // Determine payment status
+    const paymentCompleted = ['received', 'completed', 'success'].includes(transaction.status);
+    
+    // Create the order
+    const order = new Order({
+      user: req.user?.id || '000000000000000000000000', // Default user if not authenticated
+      orderNumber,
+      items: items || [{
+        productId: `${orderNumber}-default`,
+        productName: 'Product',
+        quantity: 1,
+        price: transaction.transferAmount || totalAmount || 0
+      }],
+      totalAmount: transaction.transferAmount || totalAmount || 0,
+      paymentMethod: 'bank_transfer',
+      shippingAddress: shippingAddress || {
+        fullName: 'Customer',
+        phone: '',
+        address: '',
+        city: 'Ho Chi Minh',
+        district: 'District 1',
+        ward: '',
+        notes: ''
+      },
+      notes: notes || '',
+      paymentStatus: paymentCompleted ? 'completed' : 'pending',
+      orderStatus: paymentCompleted ? 'confirmed' : 'pending',
+      transactionId: transaction._id,
+      paymentDetails: paymentCompleted ? {
+        gateway: transaction.gateway,
+        transactionDate: transaction.transactionDate,
+        transferAmount: transaction.transferAmount,
+        referenceCode: transaction.referenceCode,
+        accountNumber: transaction.accountNumber
+      } : null
+    });
+    
+    await order.save();
+    
+    console.log(`[CREATE ORDER] Order created: ${orderNumber} with status: ${order.paymentStatus}`);
+    
+    return res.status(201).json({
+      success: true,
+      data: order,
+      message: paymentCompleted ? 'Order created with payment confirmed' : 'Order created with pending payment'
+    });
+    
+  } catch (error) {
+    console.error('[CREATE ORDER] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error creating order',
+      error: error.message
+    });
+  }
+});
+
+// Update transaction status (for when payment is completed externally)
+app.patch('/api/transactions/:transactionId/complete', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { amount, gateway, accountNumber } = req.body;
+    
+    console.log(`[UPDATE TRANSACTION] Completing transaction: ${transactionId}`);
+    
+    // Find the transaction
+    let transaction = await Transaction.findOne({ referenceCode: transactionId });
+    
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        content: { $regex: transactionId, $options: 'i' }
+      });
+    }
+    
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        description: { $regex: transactionId, $options: 'i' }
+      });
+    }
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+    
+    // Update transaction
+    transaction.status = 'completed';
+    if (amount) transaction.transferAmount = amount;
+    if (gateway) transaction.gateway = gateway;
+    if (accountNumber) transaction.accountNumber = accountNumber;
+    
+    await transaction.save();
+    
+    // Try to update related order if exists
+    const orderNumber = transactionId.toUpperCase();
+    const order = await Order.findOne({ orderNumber });
+    
+    if (order) {
+      order.paymentStatus = 'completed';
+      order.orderStatus = 'confirmed';
+      order.transactionId = transaction._id;
+      order.paymentDetails = {
+        gateway: transaction.gateway,
+        transactionDate: transaction.transactionDate,
+        transferAmount: transaction.transferAmount,
+        referenceCode: transaction.referenceCode,
+        accountNumber: transaction.accountNumber
+      };
+      
+      await order.save();
+      console.log(`[UPDATE TRANSACTION] Order ${orderNumber} updated to completed`);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        transaction,
+        order
+      },
+      message: 'Transaction completed successfully'
+    });
+    
+  } catch (error) {
+    console.error('[UPDATE TRANSACTION] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating transaction',
       error: error.message
     });
   }

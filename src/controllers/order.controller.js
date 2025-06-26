@@ -28,8 +28,16 @@ const createOrder = catchAsync(async (req, res) => {
   let paymentDetails = null;
   let transactionId = null;
   
-  // Find existing transaction and extract orderNumber
-  if (transactionReference) {
+  // Handle cash payments differently
+  if (paymentMethod === 'cash' && transactionReference) {
+    // For cash payments, use transactionReference directly as orderNumber
+    if (transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+      orderNumber = transactionReference.toUpperCase();
+      console.log('💰 Cash payment: Using transaction reference as order number:', orderNumber);
+    }
+  }
+  // Handle bank transfer payments
+  else if (transactionReference) {
     const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
     
     // Try to find transaction by referenceCode first
@@ -84,6 +92,10 @@ const createOrder = catchAsync(async (req, res) => {
       } else {
         console.log('⚠️ Transaction found but not completed, payment status remains pending');
       }
+    } else if (transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+      // If no transaction found but reference has correct format, use it as orderNumber
+      orderNumber = transactionReference.toUpperCase();
+      console.log('🏦 Bank transfer: No transaction found, using reference as order number:', orderNumber);
     }
   }
   
@@ -93,6 +105,7 @@ const createOrder = catchAsync(async (req, res) => {
   }
   
   console.log('Using orderNumber:', orderNumber);
+  console.log('Payment method:', paymentMethod);
   console.log('Payment status:', paymentStatus);
   
   // Transform items to ensure consistent structure
@@ -129,7 +142,7 @@ const createOrder = catchAsync(async (req, res) => {
   res.status(201).json({
     success: true,
     data: order,
-    message: paymentStatus === 'completed' ? 'Order created successfully with payment confirmed' : 'Order created successfully',
+    message: paymentStatus === 'completed' ? 'Order created successfully with payment confirmed' : `Order created successfully (${paymentMethod} payment)`,
   });
 });
 
