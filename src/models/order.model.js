@@ -50,6 +50,13 @@ const orderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Transaction',
     },
+    paymentDetails: {
+      gateway: String,
+      transactionDate: String,
+      transferAmount: Number,
+      referenceCode: String,
+      accountNumber: String,
+    },
     notes: String,
   },
   {

@@ -21,10 +21,79 @@ const generateOrderNumber = async () => {
  * Create a new order
  */
 const createOrder = catchAsync(async (req, res) => {
-  const { items, totalAmount, paymentMethod, shippingAddress, notes } = req.body;
+  const { items, totalAmount, paymentMethod, shippingAddress, notes, transactionReference } = req.body;
   
-  // Generate unique order number
-  const orderNumber = await generateOrderNumber();
+  let orderNumber = null;
+  let paymentStatus = 'pending';
+  let paymentDetails = null;
+  let transactionId = null;
+  
+  // Find existing transaction and extract orderNumber
+  if (transactionReference) {
+    const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
+    
+    // Try to find transaction by referenceCode first
+    let transaction = await Transaction.findOne({ referenceCode: transactionReference });
+    
+    // If not found, try to find by content containing the reference
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        content: { $regex: transactionReference, $options: 'i' }
+      });
+    }
+    
+    // If not found, try to find by description containing the reference
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        description: { $regex: transactionReference, $options: 'i' }
+      });
+    }
+    
+    if (transaction) {
+      // Extract orderNumber from referenceCode if it matches POINTBOARD format
+      if (transaction.referenceCode && transaction.referenceCode.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+        orderNumber = transaction.referenceCode.toUpperCase();
+      }
+      // Otherwise extract from content
+      else if (transaction.content) {
+        const orderNumberMatch = transaction.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (orderNumberMatch) {
+          orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
+        }
+      }
+      // Otherwise extract from description
+      else if (transaction.description) {
+        const orderNumberMatch = transaction.description.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (orderNumberMatch) {
+          orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
+        }
+      }
+      
+      // Check if transaction is completed and update payment status
+      if (transaction.status === 'received' || transaction.status === 'completed' || transaction.status === 'success') {
+        paymentStatus = 'completed';
+        transactionId = transaction._id;
+        paymentDetails = {
+          gateway: transaction.gateway,
+          transactionDate: transaction.transactionDate,
+          transferAmount: transaction.transferAmount,
+          referenceCode: transaction.referenceCode,
+          accountNumber: transaction.accountNumber,
+        };
+        console.log('✅ Transaction found and completed, setting payment status to completed');
+      } else {
+        console.log('⚠️ Transaction found but not completed, payment status remains pending');
+      }
+    }
+  }
+  
+  // If no orderNumber found from transaction, generate a new one
+  if (!orderNumber) {
+    orderNumber = await generateOrderNumber();
+  }
+  
+  console.log('Using orderNumber:', orderNumber);
+  console.log('Payment status:', paymentStatus);
   
   // Transform items to ensure consistent structure
   const transformedItems = items.map(item => ({
@@ -51,14 +120,16 @@ const createOrder = catchAsync(async (req, res) => {
       notes: '',
     },
     notes: notes || '',
-    paymentStatus: 'pending',
-    orderStatus: 'pending',
+    paymentStatus: paymentStatus,
+    orderStatus: paymentStatus === 'completed' ? 'confirmed' : 'pending',
+    transactionId: transactionId,
+    paymentDetails: paymentDetails,
   });
   
   res.status(201).json({
     success: true,
     data: order,
-    message: 'Order created successfully',
+    message: paymentStatus === 'completed' ? 'Order created successfully with payment confirmed' : 'Order created successfully',
   });
 });
 

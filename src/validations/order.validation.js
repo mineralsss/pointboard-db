@@ -26,6 +26,7 @@ const createOrder = {
       notes: Joi.string().allow('', null).optional(),
     }).optional(), // Made optional in case frontend doesn't send it
     notes: Joi.string().allow('', null).optional(),
+    transactionReference: Joi.string().optional(), // New field for existing transaction reference
   }).unknown(true), // Allow unknown fields at the root level
 };
 
