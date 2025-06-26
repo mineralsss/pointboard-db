@@ -28,85 +28,73 @@ const createOrder = catchAsync(async (req, res) => {
   let paymentDetails = null;
   let transactionId = null;
   
-  // Handle cash payments differently
-  if (paymentMethod === 'cash' && transactionReference) {
-    // For cash payments, use transactionReference directly as orderNumber
-    if (transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-      orderNumber = transactionReference.toUpperCase();
-      console.log('💰 Cash payment: Using transaction reference as order number:', orderNumber);
-    }
-  }
-  // Handle bank transfer payments
-  else if (transactionReference) {
-    const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
+  console.log('🔍 CreateOrder input:', { paymentMethod, transactionReference });
+  
+  // If transactionReference is provided, use it as orderNumber regardless of payment method
+  if (transactionReference && transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+    orderNumber = transactionReference.toUpperCase();
+    console.log(`✅ Using transactionReference as orderNumber: ${orderNumber}`);
     
-    // Try to find transaction by referenceCode first
-    let transaction = await Transaction.findOne({ referenceCode: transactionReference });
-    
-    // If not found, try to find by content containing the reference
-    if (!transaction) {
-      transaction = await Transaction.findOne({
-        content: { $regex: transactionReference, $options: 'i' }
-      });
-    }
-    
-    // If not found, try to find by description containing the reference
-    if (!transaction) {
-      transaction = await Transaction.findOne({
-        description: { $regex: transactionReference, $options: 'i' }
-      });
-    }
-    
-    if (transaction) {
-      // Extract orderNumber from referenceCode if it matches POINTBOARD format
-      if (transaction.referenceCode && transaction.referenceCode.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-        orderNumber = transaction.referenceCode.toUpperCase();
-      }
-      // Otherwise extract from content
-      else if (transaction.content) {
-        const orderNumberMatch = transaction.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
-        if (orderNumberMatch) {
-          orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
-        }
-      }
-      // Otherwise extract from description
-      else if (transaction.description) {
-        const orderNumberMatch = transaction.description.match(/POINTBOARD([A-Z][0-9]{6})/i);
-        if (orderNumberMatch) {
-          orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
-        }
+    // For bank transfer, try to find existing transaction to get payment status
+    if (paymentMethod === 'bank_transfer') {
+      const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
+      
+      console.log('🏦 Bank transfer: Looking for transaction...');
+      
+      // Try to find transaction by referenceCode first
+      let transaction = await Transaction.findOne({ referenceCode: transactionReference });
+      
+      // If not found, try to find by content containing the reference
+      if (!transaction) {
+        transaction = await Transaction.findOne({
+          content: { $regex: transactionReference, $options: 'i' }
+        });
       }
       
-      // Check if transaction is completed and update payment status
-      if (transaction.status === 'received' || transaction.status === 'completed' || transaction.status === 'success') {
-        paymentStatus = 'completed';
-        transactionId = transaction._id;
-        paymentDetails = {
-          gateway: transaction.gateway,
-          transactionDate: transaction.transactionDate,
-          transferAmount: transaction.transferAmount,
-          referenceCode: transaction.referenceCode,
-          accountNumber: transaction.accountNumber,
-        };
-        console.log('✅ Transaction found and completed, setting payment status to completed');
-      } else {
-        console.log('⚠️ Transaction found but not completed, payment status remains pending');
+      // If not found, try to find by description containing the reference
+      if (!transaction) {
+        transaction = await Transaction.findOne({
+          description: { $regex: transactionReference, $options: 'i' }
+        });
       }
-    } else if (transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-      // If no transaction found but reference has correct format, use it as orderNumber
-      orderNumber = transactionReference.toUpperCase();
-      console.log('🏦 Bank transfer: No transaction found, using reference as order number:', orderNumber);
+      
+      if (transaction) {
+        console.log('✅ Transaction found:', transaction._id);
+        
+        // Check if transaction is completed and update payment status
+        if (transaction.status === 'received' || transaction.status === 'completed' || transaction.status === 'success') {
+          paymentStatus = 'completed';
+          transactionId = transaction._id;
+          paymentDetails = {
+            gateway: transaction.gateway,
+            transactionDate: transaction.transactionDate,
+            transferAmount: transaction.transferAmount,
+            referenceCode: transaction.referenceCode,
+            accountNumber: transaction.accountNumber,
+          };
+          console.log('✅ Transaction completed, setting payment status to completed');
+        } else {
+          console.log('⚠️ Transaction found but not completed, payment status remains pending');
+        }
+      } else {
+        console.log('⚠️ No transaction found in database, but using reference as orderNumber anyway');
+      }
+    } else {
+      console.log('💰 Cash payment: Using reference as orderNumber without transaction lookup');
     }
   }
   
-  // If no orderNumber found from transaction, generate a new one
+  // If no orderNumber found from transaction reference, generate a new one
   if (!orderNumber) {
     orderNumber = await generateOrderNumber();
+    console.log('🆕 Generated new orderNumber:', orderNumber);
   }
   
-  console.log('Using orderNumber:', orderNumber);
-  console.log('Payment method:', paymentMethod);
-  console.log('Payment status:', paymentStatus);
+  console.log('📦 Final values:');
+  console.log('- OrderNumber:', orderNumber);
+  console.log('- Payment method:', paymentMethod);
+  console.log('- Payment status:', paymentStatus);
+  console.log('- TransactionId:', transactionId);
   
   // Transform items to ensure consistent structure
   const transformedItems = items.map(item => ({
@@ -138,6 +126,8 @@ const createOrder = catchAsync(async (req, res) => {
     transactionId: transactionId,
     paymentDetails: paymentDetails,
   });
+  
+  console.log('✅ Order created successfully:', order.orderNumber);
   
   res.status(201).json({
     success: true,

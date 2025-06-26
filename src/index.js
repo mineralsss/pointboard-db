@@ -460,6 +460,173 @@ app.patch('/api/transactions/:transactionId/complete', async (req, res) => {
   }
 });
 
+// Debug endpoint to check order creation request
+app.post('/api/debug/order-request', (req, res) => {
+  console.log('🐛 [DEBUG] Order creation request body:');
+  console.log(JSON.stringify(req.body, null, 2));
+  
+  const { transactionReference, paymentMethod } = req.body;
+  
+  res.json({
+    success: true,
+    debug: {
+      hasTransactionReference: !!transactionReference,
+      transactionReference: transactionReference,
+      paymentMethod: paymentMethod,
+      isValidFormat: transactionReference ? transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i) : false
+    },
+    message: 'Debug info logged to console'
+  });
+});
+
+// Create order from orderRef and provided data
+app.post('/api/orders/create-from-ref', async (req, res) => {
+  try {
+    const {
+      orderRef,
+      transactionStatus,
+      paymentMethod,
+      address,
+      items,
+      totalAmount,
+      customerInfo,
+      notes
+    } = req.body;
+    
+    console.log('📦 [CREATE FROM REF] Creating order with data:', {
+      orderRef,
+      transactionStatus,
+      paymentMethod,
+      totalAmount
+    });
+    
+    // Validate required fields
+    if (!orderRef) {
+      return res.status(400).json({
+        success: false,
+        message: 'orderRef is required'
+      });
+    }
+    
+    if (!orderRef.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+      return res.status(400).json({
+        success: false,
+        message: 'orderRef must be in format POINTBOARD[A-Z][0-9]{6}'
+      });
+    }
+    
+    // Check if order already exists
+    const existingOrder = await Order.findOne({ orderNumber: orderRef.toUpperCase() });
+    if (existingOrder) {
+      return res.status(200).json({
+        success: true,
+        data: existingOrder,
+        message: 'Order already exists'
+      });
+    }
+    
+    // Determine payment and order status based on transactionStatus
+    let paymentStatus = 'pending';
+    let orderStatus = 'pending';
+    
+    switch (transactionStatus?.toLowerCase()) {
+      case 'completed':
+      case 'success':
+      case 'received':
+        paymentStatus = 'completed';
+        orderStatus = 'confirmed';
+        break;
+      case 'pending':
+        paymentStatus = 'pending';
+        orderStatus = 'pending';
+        break;
+      case 'failed':
+        paymentStatus = 'failed';
+        orderStatus = 'cancelled';
+        break;
+      default:
+        paymentStatus = 'pending';
+        orderStatus = 'pending';
+    }
+    
+    // Try to find related transaction
+    let transaction = null;
+    let transactionId = null;
+    let paymentDetails = null;
+    
+    try {
+      transaction = await Transaction.findOne({ referenceCode: orderRef }) ||
+                   await Transaction.findOne({ content: { $regex: orderRef, $options: 'i' } }) ||
+                   await Transaction.findOne({ description: { $regex: orderRef, $options: 'i' } });
+      
+      if (transaction) {
+        transactionId = transaction._id;
+        paymentDetails = {
+          gateway: transaction.gateway,
+          transactionDate: transaction.transactionDate,
+          transferAmount: transaction.transferAmount,
+          referenceCode: transaction.referenceCode,
+          accountNumber: transaction.accountNumber,
+        };
+        console.log('✅ Found related transaction:', transaction._id);
+      }
+    } catch (error) {
+      console.log('⚠️ Error finding transaction:', error.message);
+    }
+    
+    // Prepare order data
+    const orderData = {
+      user: req.user?.id || '000000000000000000000000', // Default user if not authenticated
+      orderNumber: orderRef.toUpperCase(),
+      items: items || [{
+        productId: `${orderRef}-default`,
+        productName: 'Product',
+        quantity: 1,
+        price: totalAmount || 0
+      }],
+      totalAmount: totalAmount || 0,
+      paymentMethod: paymentMethod || 'bank_transfer',
+      shippingAddress: address || {
+        fullName: customerInfo?.fullName || customerInfo?.name || 'Customer',
+        phone: customerInfo?.phone || '',
+        address: address?.address || '',
+        city: address?.city || 'Ho Chi Minh',
+        district: address?.district || 'District 1',
+        ward: address?.ward || '',
+        notes: address?.notes || ''
+      },
+      notes: notes || '',
+      paymentStatus: paymentStatus,
+      orderStatus: orderStatus,
+      transactionId: transactionId,
+      paymentDetails: paymentDetails
+    };
+    
+    // Create the order
+    const order = await Order.create(orderData);
+    
+    console.log('✅ [CREATE FROM REF] Order created successfully:', {
+      orderNumber: order.orderNumber,
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus
+    });
+    
+    return res.status(201).json({
+      success: true,
+      data: order,
+      message: `Order created successfully with ${paymentStatus} payment status`
+    });
+    
+  } catch (error) {
+    console.error('[CREATE FROM REF] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error creating order',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use(errorConverter);
 app.use(errorHandler);
