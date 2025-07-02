@@ -259,6 +259,12 @@ class AuthService {
       throw new APIError(400, "Your account has been blocked");
     }
 
+    // Verify account is verified
+    if (!user.isVerified) {
+      console.log(`[LOGIN] Account not verified for user: ${email}`);
+      throw new APIError(400, "Your account has not been verified. Please check your email and verify your account before logging in.");
+    }
+
     console.log(`[LOGIN] Login successful for: ${email}`);
 
     // Generate tokens

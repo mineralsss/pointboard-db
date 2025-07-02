@@ -18,121 +18,26 @@ const generateOrderNumber = async () => {
 };
 
 /**
- * Create a new order
+ * Create a new order - DEPRECATED
+ * Use /api/orders/create-from-ref endpoint instead
  */
 const createOrder = catchAsync(async (req, res) => {
-  const { items, totalAmount, paymentMethod, shippingAddress, notes, transactionReference } = req.body;
+  console.log('🚨 [DEPRECATED] Old createOrder endpoint called');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
   
-  let orderNumber = null;
-  let paymentStatus = 'pending';
-  let paymentDetails = null;
-  let transactionId = null;
-  
-  console.log('🔍 CreateOrder input:', { paymentMethod, transactionReference });
-  
-  // If transactionReference is provided, use it as orderNumber regardless of payment method
-  if (transactionReference && transactionReference.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-    orderNumber = transactionReference.toUpperCase();
-    console.log(`✅ Using transactionReference as orderNumber: ${orderNumber}`);
-    
-    // For bank transfer, try to find existing transaction to get payment status
-    if (paymentMethod === 'bank_transfer') {
-      const Transaction = require(path.resolve(__dirname, '../models/transaction.model.js'));
-      
-      console.log('🏦 Bank transfer: Looking for transaction...');
-      
-      // Try to find transaction by referenceCode first
-      let transaction = await Transaction.findOne({ referenceCode: transactionReference });
-      
-      // If not found, try to find by content containing the reference
-      if (!transaction) {
-        transaction = await Transaction.findOne({
-          content: { $regex: transactionReference, $options: 'i' }
-        });
-      }
-      
-      // If not found, try to find by description containing the reference
-      if (!transaction) {
-        transaction = await Transaction.findOne({
-          description: { $regex: transactionReference, $options: 'i' }
-        });
-      }
-      
-      if (transaction) {
-        console.log('✅ Transaction found:', transaction._id);
-        
-        // Check if transaction is completed and update payment status
-        if (transaction.status === 'received' || transaction.status === 'completed' || transaction.status === 'success') {
-          paymentStatus = 'completed';
-          transactionId = transaction._id;
-          paymentDetails = {
-            gateway: transaction.gateway,
-            transactionDate: transaction.transactionDate,
-            transferAmount: transaction.transferAmount,
-            referenceCode: transaction.referenceCode,
-            accountNumber: transaction.accountNumber,
-          };
-          console.log('✅ Transaction completed, setting payment status to completed');
-        } else {
-          console.log('⚠️ Transaction found but not completed, payment status remains pending');
-        }
-      } else {
-        console.log('⚠️ No transaction found in database, but using reference as orderNumber anyway');
-      }
-    } else {
-      console.log('💰 Cash payment: Using reference as orderNumber without transaction lookup');
+  return res.status(400).json({
+    success: false,
+    message: 'This endpoint is deprecated. Please use /api/orders/create-from-ref endpoint instead.',
+    correctEndpoint: '/api/orders/create-from-ref',
+    requiredFields: {
+      orderRef: 'POINTBOARD[A-Z][0-9]{6}',
+      transactionStatus: 'completed|pending|failed',
+      paymentMethod: 'bank_transfer|cash|card',
+      totalAmount: 'number',
+      address: 'object (optional)',
+      customerInfo: 'object (optional)',
+      items: 'array (optional)'
     }
-  }
-  
-  // If no orderNumber found from transaction reference, generate a new one
-  if (!orderNumber) {
-    orderNumber = await generateOrderNumber();
-    console.log('🆕 Generated new orderNumber:', orderNumber);
-  }
-  
-  console.log('📦 Final values:');
-  console.log('- OrderNumber:', orderNumber);
-  console.log('- Payment method:', paymentMethod);
-  console.log('- Payment status:', paymentStatus);
-  console.log('- TransactionId:', transactionId);
-  
-  // Transform items to ensure consistent structure
-  const transformedItems = items.map(item => ({
-    productId: item.productId || item.id || orderNumber + '-' + Math.random().toString(36).substr(2, 9),
-    productName: item.productName || item.name || 'Product',
-    quantity: item.quantity || 1,
-    price: item.price || item.amount || 0,
-  }));
-  
-  // Create the order
-  const order = await Order.create({
-    user: req.user.id,
-    orderNumber,
-    items: transformedItems,
-    totalAmount,
-    paymentMethod: paymentMethod || 'bank_transfer',
-    shippingAddress: shippingAddress || {
-      fullName: req.user.firstName + ' ' + req.user.lastName,
-      phone: req.user.phoneNumber || '',
-      address: req.user.address || '',
-      city: 'Ho Chi Minh',
-      district: 'District 1',
-      ward: '',
-      notes: '',
-    },
-    notes: notes || '',
-    paymentStatus: paymentStatus,
-    orderStatus: paymentStatus === 'completed' ? 'confirmed' : 'pending',
-    transactionId: transactionId,
-    paymentDetails: paymentDetails,
-  });
-  
-  console.log('✅ Order created successfully:', order.orderNumber);
-  
-  res.status(201).json({
-    success: true,
-    data: order,
-    message: paymentStatus === 'completed' ? 'Order created successfully with payment confirmed' : `Order created successfully (${paymentMethod} payment)`,
   });
 });
 

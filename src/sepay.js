@@ -33,11 +33,11 @@ export default async function handler(req, res) {
     await client.connect();
     const database = client.db('your_database_name'); // Replace with your DB name
     
-    // Save transaction record
+    // Save transaction record only
     const transactions = database.collection('transactions');
     const payload = req.body;
     
-    // Extract order number from content if possible
+    // Extract order number for logging purposes
     let orderNumber = null;
     if (payload.content) {
       // Match POINTBOARD format: POINTBOARDA247872
@@ -59,32 +59,15 @@ export default async function handler(req, res) {
       rawData: payload
     });
     
-    // If orderNumber was found, update order status
-    if (orderNumber) {
-      const orders = database.collection('orders');
-      await orders.updateOne(
-        { orderNumber: orderNumber },
-        { 
-          $set: { 
-            paymentStatus: 'paid',
-            paymentDetails: {
-              paymentId: payload.id,
-              gateway: payload.gateway,
-              transactionDate: payload.transactionDate,
-              transferAmount: payload.transferAmount,
-              referenceCode: payload.referenceCode
-            }
-          } 
-        }
-      );
-    }
+    console.log(`📝 Transaction saved for orderNumber: ${orderNumber || 'N/A'}`);
+    console.log('ℹ️  Note: Order will NOT be created/updated automatically. Use /api/orders/create-from-ref endpoint.');
     
     await client.close();
     
     // Always return success
     return res.status(200).json({
       success: true,
-      message: 'Payment notification received'
+      message: 'Payment notification received and transaction saved'
     });
   } catch (error) {
     console.error('Webhook processing error:', error);

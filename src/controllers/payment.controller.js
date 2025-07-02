@@ -31,52 +31,29 @@ exports.sePayWebhook = async (req, res) => {
       });
       
       const savedTransaction = await transaction.save();
-      console.log('Transaction saved successfully:', savedTransaction._id);
+      console.log('✅ Transaction saved successfully:', savedTransaction._id);
+      
+      // Extract order number for logging purposes
+      let orderNumber = null;
+      if (req.body.referenceCode && req.body.referenceCode.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
+        orderNumber = req.body.referenceCode.toUpperCase();
+      } else if (req.body.content) {
+        const orderNumberMatch = req.body.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (orderNumberMatch) {
+          orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
+        }
+      }
+      
+      console.log(`📝 Transaction received for orderNumber: ${orderNumber || 'N/A'}`);
+      console.log('ℹ️  Note: Order will NOT be created automatically. Use /api/orders/create-from-ref endpoint.');
+      
     } catch (err) {
       console.error('❌ Error saving transaction:', err);
-      // Still continue to respond to the webhook
-    }
-    
-    // Extract order number from referenceCode or content
-    let orderNumber = null;
-    
-    // First try to use the referenceCode directly if it matches POINTBOARD format
-    if (req.body.referenceCode && req.body.referenceCode.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-      orderNumber = req.body.referenceCode.toUpperCase();
-      console.log('Found order number from referenceCode:', orderNumber);
-    }
-    // Otherwise extract from content
-    else if (req.body.content) {
-      const orderNumberMatch = req.body.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
-      if (orderNumberMatch) {
-        orderNumber = `POINTBOARD${orderNumberMatch[1]}`;
-        console.log('Found order number from content:', orderNumber);
-      }
-    }
-    
-    // If order number found, try to update the order status
-    if (orderNumber) {
-      try {
-        const Order = require(path.resolve(__dirname, '../models/order.model.js'));
-        const order = await Order.findOne({ orderNumber: orderNumber });
-        
-        if (order) {
-          order.paymentStatus = 'completed';
-          order.transactionId = savedTransaction._id;
-          await order.save();
-          console.log(`✅ Updated order ${orderNumber} payment status to completed`);
-        } else {
-          console.log(`⚠️ Order ${orderNumber} not found in database`);
-        }
-      } catch (orderError) {
-        console.error('❌ Error updating order:', orderError);
-      }
     }
     
     return res.status(200).json({ 
       success: true, 
-      orderNumber: orderNumber,
-      message: 'Payment notification received' 
+      message: 'Payment notification received and transaction saved' 
     });
   } catch (error) {
     console.error('Error processing webhook:', error);
