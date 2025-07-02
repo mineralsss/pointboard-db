@@ -9,6 +9,7 @@ const Transaction = require('./models/transaction.model');
 const Order = require('./models/order.model');
 const User = require('./models/user.model');
 const { errorConverter, errorHandler } = require('./middlewares/error.middleware');
+const Review = require('./models/review.model.js');
 
 const app = express();
 
@@ -852,6 +853,78 @@ app.patch('/api/v1/orders/:orderId/payment-status', async (req, res) => {
       message: 'Error updating payment status',
       error: error.message
     });
+  }
+});
+
+// Create a review
+app.post('/api/v1/reviews', async (req, res) => {
+  try {
+    const { user, product, order, rating, comment, images } = req.body;
+    if (!user || !rating) {
+      return res.status(400).json({ success: false, message: 'user and rating are required' });
+    }
+    const review = await Review.create({ user, product, order, rating, comment, images });
+    return res.status(201).json({ success: true, data: review, message: 'Review created' });
+  } catch (error) {
+    console.error('[REVIEW] Create error:', error);
+    return res.status(500).json({ success: false, message: 'Error creating review', error: error.message });
+  }
+});
+
+// Get all reviews (optionally filter by product/order)
+app.get('/api/v1/reviews', async (req, res) => {
+  try {
+    const { product, order, user } = req.query;
+    const filter = {};
+    if (product && mongoose.Types.ObjectId.isValid(product)) filter.product = product;
+    if (order && mongoose.Types.ObjectId.isValid(order)) filter.order = order;
+    if (user && mongoose.Types.ObjectId.isValid(user)) filter.user = user;
+    const reviews = await Review.find(filter).populate('user', 'firstName lastName email').populate('product', 'productName').populate('order', 'orderNumber');
+    return res.status(200).json({ success: true, data: reviews });
+  } catch (error) {
+    console.error('[REVIEW] Get all error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching reviews', error: error.message });
+  }
+});
+
+// Get review by ID
+app.get('/api/v1/reviews/:id', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id).populate('user', 'firstName lastName email').populate('product', 'productName').populate('order', 'orderNumber');
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    return res.status(200).json({ success: true, data: review });
+  } catch (error) {
+    console.error('[REVIEW] Get by ID error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching review', error: error.message });
+  }
+});
+
+// Update review
+app.patch('/api/v1/reviews/:id', async (req, res) => {
+  try {
+    const { rating, comment, images, isApproved } = req.body;
+    const review = await Review.findByIdAndUpdate(
+      req.params.id,
+      { rating, comment, images, isApproved },
+      { new: true, runValidators: true }
+    );
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    return res.status(200).json({ success: true, data: review, message: 'Review updated' });
+  } catch (error) {
+    console.error('[REVIEW] Update error:', error);
+    return res.status(500).json({ success: false, message: 'Error updating review', error: error.message });
+  }
+});
+
+// Delete review
+app.delete('/api/v1/reviews/:id', async (req, res) => {
+  try {
+    const review = await Review.findByIdAndDelete(req.params.id);
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    return res.status(200).json({ success: true, message: 'Review deleted' });
+  } catch (error) {
+    console.error('[REVIEW] Delete error:', error);
+    return res.status(500).json({ success: false, message: 'Error deleting review', error: error.message });
   }
 });
 
