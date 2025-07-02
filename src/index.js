@@ -568,6 +568,293 @@ app.get('/api/debug/recent-orders', async (req, res) => {
   }
 });
 
+// Analytics endpoint for admin dashboard
+app.get('/api/v1/analytics', async (req, res) => {
+  try {
+    console.log('📊 [ANALYTICS] Fetching analytics data');
+    
+    // Get total orders count
+    const totalOrders = await Order.countDocuments();
+    
+    // Get orders by status
+    const ordersByStatus = await Order.aggregate([
+      {
+        $group: {
+          _id: '$orderStatus',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Get orders by payment status
+    const ordersByPaymentStatus = await Order.aggregate([
+      {
+        $group: {
+          _id: '$paymentStatus',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Calculate total revenue from multiple sources
+    // 1. From completed orders
+    const orderRevenueData = await Order.aggregate([
+      {
+        $match: {
+          paymentStatus: 'completed'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // 2. From successful transactions (backup calculation)
+    const transactionRevenueData = await Transaction.aggregate([
+      {
+        $match: {
+          status: { $in: ['completed', 'success', 'received'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$transferAmount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // 3. From all orders with any payment status (for debugging)
+    const allOrdersRevenueData = await Order.aggregate([
+      {
+        $group: {
+          _id: '$paymentStatus',
+          totalAmount: { $sum: '$totalAmount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    console.log('🔍 [ANALYTICS] Revenue debugging:', {
+      orderRevenue: orderRevenueData.length > 0 ? orderRevenueData[0].totalRevenue : 0,
+      transactionRevenue: transactionRevenueData.length > 0 ? transactionRevenueData[0].totalAmount : 0,
+      allOrdersByStatus: allOrdersRevenueData
+    });
+    
+    // Get recent orders (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentOrders = await Order.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+    
+    // Get total users
+    const totalUsers = await User.countDocuments();
+    
+    // Get verified users
+    const verifiedUsers = await User.countDocuments({ isVerified: true });
+    
+    // Get users by role
+    const usersByRole = await User.aggregate([
+      {
+        $group: {
+          _id: '$role',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Get recent transactions (last 7 days)
+    const recentTransactions = await Transaction.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+    
+    // Calculate total transaction amount
+    const transactionData = await Transaction.aggregate([
+      {
+        $match: {
+          status: { $in: ['completed', 'success', 'received'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$transferAmount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Convert arrays to objects for easier access
+    const statusCounts = {};
+    ordersByStatus.forEach(item => {
+      statusCounts[item._id] = item.count;
+    });
+    
+    const paymentStatusCounts = {};
+    ordersByPaymentStatus.forEach(item => {
+      paymentStatusCounts[item._id] = item.count;
+    });
+    
+    const roleCounts = {};
+    usersByRole.forEach(item => {
+      roleCounts[item._id] = item.count;
+    });
+    
+    // Prepare analytics data
+    const analytics = {
+      orders: {
+        total: totalOrders,
+        pending: statusCounts.pending || 0,
+        confirmed: statusCounts.confirmed || 0,
+        processing: statusCounts.processing || 0,
+        shipped: statusCounts.shipped || 0,
+        delivered: statusCounts.delivered || 0,
+        cancelled: statusCounts.cancelled || 0,
+        recent: recentOrders
+      },
+      payments: {
+        pending: paymentStatusCounts.pending || 0,
+        completed: paymentStatusCounts.completed || 0,
+        failed: paymentStatusCounts.failed || 0,
+        processing: paymentStatusCounts.processing || 0,
+        refunded: paymentStatusCounts.refunded || 0
+      },
+      revenue: {
+        total: orderRevenueData.length > 0 ? orderRevenueData[0].totalRevenue : 0,
+        completedOrders: orderRevenueData.length > 0 ? orderRevenueData[0].count : 0,
+        // Alternative calculation from transactions
+        fromTransactions: transactionRevenueData.length > 0 ? transactionRevenueData[0].totalAmount : 0,
+        // Debug info
+        allOrdersByStatus: allOrdersRevenueData
+      },
+      users: {
+        total: totalUsers,
+        verified: verifiedUsers,
+        unverified: totalUsers - verifiedUsers,
+        byRole: roleCounts
+      },
+      transactions: {
+        total: await Transaction.countDocuments(),
+        recent: recentTransactions,
+        totalAmount: transactionData.length > 0 ? transactionData[0].totalAmount : 0,
+        completedCount: transactionData.length > 0 ? transactionData[0].count : 0
+      },
+      summary: {
+        totalRevenue: orderRevenueData.length > 0 ? orderRevenueData[0].totalRevenue : 0,
+        totalOrders: totalOrders,
+        totalUsers: totalUsers,
+        pendingOrders: statusCounts.pending || 0,
+        completedOrders: paymentStatusCounts.completed || 0
+      }
+    };
+    
+    console.log('✅ [ANALYTICS] Analytics data prepared:', {
+      totalOrders: analytics.orders.total,
+      totalRevenue: analytics.revenue.total,
+      revenueFromTransactions: analytics.revenue.fromTransactions,
+      pendingOrders: analytics.orders.pending,
+      totalUsers: analytics.users.total
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: analytics,
+      message: 'Analytics data retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('[ANALYTICS] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching analytics data',
+      error: error.message
+    });
+  }
+});
+
+// Update order payment status endpoint
+app.patch('/api/v1/orders/:orderId/payment-status', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentStatus } = req.body;
+    
+    console.log('🔄 [PAYMENT UPDATE] Updating payment status:', {
+      orderId,
+      paymentStatus
+    });
+    
+    // Validate orderId
+    if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order ID'
+      });
+    }
+    
+    // Validate payment status
+    const validPaymentStatuses = ['pending', 'processing', 'completed', 'failed', 'refunded'];
+    if (!paymentStatus || !validPaymentStatuses.includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment status. Must be one of: pending, processing, completed, failed, refunded'
+      });
+    }
+    
+    // Find and update the order
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { 
+        paymentStatus: paymentStatus,
+        updatedAt: new Date()
+      },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+    
+    console.log('✅ [PAYMENT UPDATE] Order payment status updated:', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      oldStatus: order.paymentStatus,
+      newStatus: paymentStatus
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus
+      },
+      message: 'Payment status updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('[PAYMENT UPDATE] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating payment status',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use(errorConverter);
 app.use(errorHandler);
