@@ -1061,7 +1061,11 @@ app.get('/api/v1/reviews', async (req, res) => {
     if (product && mongoose.Types.ObjectId.isValid(product)) filter.product = product;
     if (order && mongoose.Types.ObjectId.isValid(order)) filter.order = order;
     if (user && mongoose.Types.ObjectId.isValid(user)) filter.user = user;
-    const reviews = await Review.find(filter).populate('user', 'firstName lastName email').populate('product', 'productName').populate('order', 'orderNumber');
+    const reviews = await Review.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('user', 'firstName lastName email')
+      .populate('product', 'name')
+      .populate('order', 'orderNumber');
     return res.status(200).json({ success: true, data: reviews });
   } catch (error) {
     console.error('[REVIEW] Get all error:', error);
@@ -1072,7 +1076,7 @@ app.get('/api/v1/reviews', async (req, res) => {
 // Get review by ID
 app.get('/api/v1/reviews/:id', async (req, res) => {
   try {
-    const review = await Review.findById(req.params.id).populate('user', 'firstName lastName email').populate('product', 'productName').populate('order', 'orderNumber');
+    const review = await Review.findById(req.params.id).populate('user', 'firstName lastName email').populate('product', 'name').populate('order', 'orderNumber');
     if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
     return res.status(200).json({ success: true, data: review });
   } catch (error) {
