@@ -7,38 +7,175 @@ const catchAsync = require(path.resolve(__dirname, '../utils/catchAsync.js'));
  * Generate unique order number
  */
 const generateOrderNumber = async () => {
-  // Generate random letter (A-Z)
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
+  let orderNumber;
+  let isUnique = false;
+  let attempts = 0;
+  const maxAttempts = 10;
   
-  // Generate random 6-digit number
-  const randomNumber = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+  while (!isUnique && attempts < maxAttempts) {
+    // Generate random letter (A-Z)
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
+    
+    // Generate random 6-digit number
+    const randomNumber = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    
+    orderNumber = `POINTBOARD${randomLetter}${randomNumber}`;
+    
+    // Check if this order number already exists (case-insensitive)
+    const existingOrder = await Order.findOne({ 
+      orderNumber: { $regex: new RegExp(`^${orderNumber}$`, 'i') }
+    });
+    
+    if (!existingOrder) {
+      isUnique = true;
+      console.log('🎯 [GENERATE ORDER NUMBER] Generated unique order number:', orderNumber);
+    } else {
+      console.log('⚠️ [GENERATE ORDER NUMBER] Collision detected:', orderNumber, 'Attempt:', attempts + 1);
+    }
+    
+    attempts++;
+  }
   
-  return `POINTBOARD${randomLetter}${randomNumber}`;
+  if (!isUnique) {
+    throw new Error('Unable to generate unique order number after maximum attempts');
+  }
+  
+  return orderNumber;
 };
 
 /**
- * Create a new order - DEPRECATED
- * Use /api/orders/create-from-ref endpoint instead
+ * Create a new order with generated order number
  */
 const createOrder = catchAsync(async (req, res) => {
-  console.log('🚨 [DEPRECATED] Old createOrder endpoint called');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
-  
-  return res.status(400).json({
-    success: false,
-    message: 'This endpoint is deprecated. Please use /api/orders/create-from-ref endpoint instead.',
-    correctEndpoint: '/api/orders/create-from-ref',
-    requiredFields: {
-      orderRef: 'POINTBOARD[A-Z][0-9]{6}',
-      transactionStatus: 'completed|pending|failed',
-      paymentMethod: 'bank_transfer|cash|card',
-      totalAmount: 'number',
-      address: 'object (optional)',
-      customerInfo: 'object (optional)',
-      items: 'array (optional)'
+  try {
+    const {
+      items,
+      totalAmount,
+      paymentMethod = 'bank_transfer',
+      shippingAddress,
+      notes,
+      customerInfo,
+      useCalculatedTotal = false, // New parameter to use calculated total instead of provided total
+      includeVAT = true, // New parameter to include VAT in calculations
+      vatRate = 0.10 // VAT rate (10% = 0.10)
+    } = req.body;
+    
+    console.log('📦 [CREATE ORDER] Creating order with data:', {
+      totalAmount,
+      paymentMethod,
+      hasItems: !!items,
+      itemsLength: items?.length || 0
+    });
+    
+    // Validate required fields
+    if (!totalAmount || totalAmount <= 0) {
+      throw new APIError(400, 'totalAmount is required and must be greater than 0');
     }
-  });
+    
+    if (!items || items.length === 0) {
+      throw new APIError(400, 'items are required');
+    }
+    
+    // Generate unique order number
+    const orderNumber = await generateOrderNumber();
+    console.log('🎯 [CREATE ORDER] Generated order number:', orderNumber);
+    
+    // Calculate subtotal from items (without VAT)
+    const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    // Calculate VAT amount
+    const vatAmount = includeVAT ? subtotal * vatRate : 0;
+    
+    // Calculate total with VAT
+    const calculatedTotal = subtotal + vatAmount;
+    
+    console.log('💰 [CREATE ORDER] Price breakdown:', {
+      subtotal: subtotal,
+      vatRate: vatRate,
+      vatAmount: vatAmount,
+      calculatedTotal: calculatedTotal,
+      providedTotal: totalAmount,
+      includeVAT: includeVAT
+    });
+    
+    // Determine which total to use
+    let finalTotal = totalAmount;
+    if (useCalculatedTotal) {
+      finalTotal = calculatedTotal;
+      console.log('💰 [CREATE ORDER] Using calculated total:', calculatedTotal);
+    } else {
+      // Validate total amount matches calculated total (with tolerance for floating point precision)
+      const tolerance = 0.01; // 1 cent tolerance
+      if (Math.abs(calculatedTotal - totalAmount) > tolerance) {
+        console.log('💰 [CREATE ORDER] Amount mismatch:', {
+          provided: totalAmount,
+          calculated: calculatedTotal,
+          subtotal: subtotal,
+          vatAmount: vatAmount,
+          difference: Math.abs(calculatedTotal - totalAmount)
+        });
+        throw new APIError(400, `Total amount (${totalAmount}) does not match the calculated total (${calculatedTotal}). Subtotal: ${subtotal}, VAT (${vatRate * 100}%): ${vatAmount.toFixed(2)}. Difference: ${Math.abs(calculatedTotal - totalAmount).toFixed(2)}`);
+      }
+    }
+    
+    // Prepare order data
+    const orderData = {
+      user: req.user.id,
+      orderNumber: orderNumber,
+      items: items,
+      totalAmount: finalTotal,
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      vatRate: vatRate,
+      paymentMethod: paymentMethod,
+      shippingAddress: {
+        fullName: customerInfo?.fullName || customerInfo?.name || shippingAddress?.fullName || 'Customer',
+        phone: customerInfo?.phone || shippingAddress?.phone || '',
+        address: shippingAddress?.address || shippingAddress?.street || '',
+        city: shippingAddress?.city || 'Ho Chi Minh',
+        district: shippingAddress?.district || 'District 1',
+        ward: shippingAddress?.ward || '',
+        notes: shippingAddress?.notes || ''
+      },
+      notes: notes || '',
+      paymentStatus: 'pending',
+      orderStatus: 'pending'
+    };
+    
+    console.log('📦 [CREATE ORDER] Final order data:', {
+      orderNumber: orderData.orderNumber,
+      totalAmount: orderData.totalAmount,
+      subtotal: orderData.subtotal,
+      vatAmount: orderData.vatAmount,
+      vatRate: orderData.vatRate,
+      calculatedTotal: calculatedTotal,
+      providedTotal: totalAmount,
+      useCalculatedTotal: useCalculatedTotal,
+      itemsCount: orderData.items.length
+    });
+    
+    // Create the order
+    const order = await Order.create(orderData);
+    
+    console.log('✅ [CREATE ORDER] Order created successfully:', {
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount
+    });
+    
+    return res.status(201).json({
+      success: true,
+      data: {
+        order: order,
+        paymentCode: orderNumber, // This is the code to show on payment
+        message: `Order created successfully. Use order number ${orderNumber} for payment.`
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CREATE ORDER] Error:', error);
+    throw error;
+  }
 });
 
 /**
@@ -63,20 +200,38 @@ const getOrderById = catchAsync(async (req, res) => {
 });
 
 /**
- * Get user's orders
+ * Get user's orders - Sorted by date (newest first)
  */
 const getUserOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, sortBy = 'createdAt:desc' } = req.query;
+  const { page = 1, limit = 10 } = req.query;
   
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sortBy, // Use paginate plugin's sortBy format: 'field:order'
-    populate: 'user', // Use string format for populate
-  };
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
   
   const filter = { user: req.user.id };
-  const orders = await Order.paginate(filter, options);
+  
+  // First, get total count for pagination info
+  const totalResults = await Order.countDocuments(filter);
+  const totalPages = Math.ceil(totalResults / limitNum);
+  
+  // Get user's orders sorted by date (newest first) with pagination
+  let ordersQuery = Order.find(filter)
+    .sort({ createdAt: -1 }) // Sort by newest first
+    .skip(skip)
+    .limit(limitNum)
+    .populate('user', 'firstName lastName email'); // Populate user info
+  
+  const results = await ordersQuery.exec();
+  
+  // Create pagination response object
+  const orders = {
+    page: pageNum,
+    limit: limitNum,
+    totalPages,
+    totalResults,
+    results,
+  };
   
   res.status(200).json({
     success: true,
@@ -171,29 +326,235 @@ const cancelOrder = catchAsync(async (req, res) => {
 });
 
 /**
- * Get all orders (admin only)
+ * Get all orders (admin only) - Globally sorted by date
  */
 const getAllOrders = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, status, sortBy = 'createdAt:desc' } = req.query;
+  const { page = 1, limit = 10, status, paymentStatus, search, startDate, endDate } = req.query;
   
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sortBy, // Use paginate plugin's sortBy format: 'field:order'
-    populate: 'user', // Use string format for populate
-  };
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
   
+  // Build filter
   const filter = {};
+  
+  // Status filter
   if (status) {
     filter.orderStatus = status;
   }
   
-  const orders = await Order.paginate(filter, options);
+  // Payment status filter
+  if (paymentStatus) {
+    filter.paymentStatus = paymentStatus;
+  }
+  
+  // Date range filter
+  if (startDate || endDate) {
+    filter.createdAt = {};
+    if (startDate) {
+      filter.createdAt.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      filter.createdAt.$lte = new Date(endDate);
+    }
+  }
+  
+  // Search filter (search in order number, user email, or product names)
+  if (search) {
+    const searchRegex = new RegExp(search, 'i');
+    filter.$or = [
+      { orderNumber: searchRegex },
+      { 'items.productName': searchRegex }
+    ];
+  }
+  
+  // First, get total count for pagination info
+  const totalResults = await Order.countDocuments(filter);
+  const totalPages = Math.ceil(totalResults / limitNum);
+  
+  // Get all orders sorted by date (newest first) with pagination
+  let ordersQuery = Order.find(filter)
+    .sort({ createdAt: -1 }) // Sort by newest first
+    .skip(skip)
+    .limit(limitNum)
+    .populate('user', 'firstName lastName email'); // Populate user info
+  
+  const results = await ordersQuery.exec();
+  
+  // Create pagination response object
+  const orders = {
+    page: pageNum,
+    limit: limitNum,
+    totalPages,
+    totalResults,
+    results,
+    filters: {
+      status,
+      paymentStatus,
+      search,
+      startDate,
+      endDate
+    }
+  };
   
   res.status(200).json({
     success: true,
     data: orders,
   });
+});
+
+/**
+ * Get order statistics for admin dashboard
+ */
+const getOrderStats = catchAsync(async (req, res) => {
+  const { startDate, endDate } = req.query;
+  
+  // Build date filter
+  const dateFilter = {};
+  if (startDate || endDate) {
+    dateFilter.createdAt = {};
+    if (startDate) {
+      dateFilter.createdAt.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      dateFilter.createdAt.$lte = new Date(endDate);
+    }
+  }
+  
+  // Get total orders
+  const totalOrders = await Order.countDocuments(dateFilter);
+  
+  // Get orders by status
+  const ordersByStatus = await Order.aggregate([
+    { $match: dateFilter },
+    {
+      $group: {
+        _id: '$orderStatus',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$totalAmount' }
+      }
+    }
+  ]);
+  
+  // Get orders by payment status
+  const ordersByPaymentStatus = await Order.aggregate([
+    { $match: dateFilter },
+    {
+      $group: {
+        _id: '$paymentStatus',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$totalAmount' }
+      }
+    }
+  ]);
+  
+  // Get total revenue
+  const totalRevenue = await Order.aggregate([
+    { $match: { ...dateFilter, paymentStatus: 'completed' } },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$totalAmount' }
+      }
+    }
+  ]);
+  
+  // Get recent orders (last 5)
+  const recentOrders = await Order.find(dateFilter)
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .populate('user', 'firstName lastName email')
+    .select('orderNumber totalAmount orderStatus createdAt user');
+  
+  // Format the statistics
+  const stats = {
+    totalOrders,
+    totalRevenue: totalRevenue[0]?.total || 0,
+    ordersByStatus: ordersByStatus.reduce((acc, item) => {
+      acc[item._id] = { count: item.count, totalAmount: item.totalAmount };
+      return acc;
+    }, {}),
+    ordersByPaymentStatus: ordersByPaymentStatus.reduce((acc, item) => {
+      acc[item._id] = { count: item.count, totalAmount: item.totalAmount };
+      return acc;
+    }, {}),
+    recentOrders
+  };
+  
+  res.status(200).json({
+    success: true,
+    data: stats,
+  });
+});
+
+/**
+ * Debug endpoint to check all order numbers
+ */
+const debugOrderNumbers = catchAsync(async (req, res) => {
+  try {
+    const orders = await Order.find({})
+      .sort({ createdAt: -1 })
+      .select('orderNumber createdAt totalAmount paymentStatus orderStatus')
+      .limit(20);
+    
+    console.log('🔍 [DEBUG] Recent order numbers:');
+    orders.forEach(order => {
+      console.log(`- ${order.orderNumber} (${order.createdAt.toISOString()}) - ${order.totalAmount} - ${order.paymentStatus}`);
+    });
+    
+      res.status(200).json({
+    success: true,
+    data: {
+      totalOrders: orders.length,
+      orders: orders.map(order => ({
+        orderNumber: order.orderNumber,
+        createdAt: order.createdAt,
+        totalAmount: order.totalAmount,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus
+      })),
+      // Check for potential duplicates or similar order numbers
+      potentialIssues: orders.filter(order => 
+        order.orderNumber.toLowerCase().includes('pointboard') && 
+        order.orderNumber !== order.orderNumber.toUpperCase()
+      ).map(order => ({
+        orderNumber: order.orderNumber,
+        issue: 'Mixed case detected'
+      })),
+      // Search for specific order number
+      searchResults: {
+        pointBoardA112094: await Order.findOne({ 
+          orderNumber: { $regex: /pointboarda112094/i } 
+        }).select('orderNumber createdAt totalAmount')
+      }
+    }
+  });
+  } catch (error) {
+    console.error('[DEBUG ORDER NUMBERS] Error:', error);
+    throw new APIError(500, 'Failed to fetch order numbers');
+  }
+});
+
+/**
+ * Generate order number for payment code
+ */
+const generateOrderNumberForPayment = catchAsync(async (req, res) => {
+  try {
+    const orderNumber = await generateOrderNumber();
+    
+    console.log('🎯 [GENERATE ORDER NUMBER] Generated:', orderNumber);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        orderNumber: orderNumber,
+        message: 'Order number generated successfully. Use this exact code for payment.'
+      }
+    });
+  } catch (error) {
+    console.error('[GENERATE ORDER NUMBER] Error:', error);
+    throw new APIError(500, 'Failed to generate order number');
+  }
 });
 
 module.exports = {
@@ -203,4 +564,8 @@ module.exports = {
   updateOrderStatus,
   cancelOrder,
   getAllOrders,
+  getOrderStats,
+  generateOrderNumberForPayment,
+  debugOrderNumbers,
+  generateOrderNumber,
 }; 

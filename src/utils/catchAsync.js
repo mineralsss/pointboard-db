@@ -2,6 +2,16 @@ module.exports = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch((error) => {
     console.error("Unhandled error in request:", error);
     
+    // Handle APIError instances
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+        errorCode: error.errorCode || 'UNKNOWN_ERROR',
+        errorType: error.errorType || 'general_error'
+      });
+    }
+    
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = {};
@@ -23,6 +33,7 @@ module.exports = (fn) => (req, res, next) => {
     res.status(500).json({
       success: false,
       errorType: 'server_error',
+      errorCode: 'INTERNAL_SERVER_ERROR',
       message: 'An unexpected error occurred. Please try again later.'
     });
   });

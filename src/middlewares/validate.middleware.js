@@ -15,7 +15,10 @@ const validate = (schema) => (req, res, next) => {
     const errorMessage = error.details
       .map((details) => details.message)
       .join(", ");
-    return next(new APIError(400, errorMessage));
+    const apiError = new APIError(400, errorMessage);
+    apiError.errorCode = "VALIDATION_ERROR";
+    apiError.errorType = "validation_error";
+    return next(apiError);
   }
 
   if (value.params) Object.assign(req.params, value.params);

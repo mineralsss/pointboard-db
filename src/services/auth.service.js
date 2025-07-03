@@ -57,7 +57,10 @@ class AuthService {
       }).select('+emailVerificationToken +emailVerificationExpires');
 
       if (!user) {
-        throw new APIError(400, 'Invalid or expired verification token');
+        const error = new APIError(400, 'Invalid or expired verification token');
+        error.errorCode = 'INVALID_VERIFICATION_TOKEN';
+        error.errorType = 'verification_error';
+        throw error;
       }
 
       // Mark user as verified
@@ -81,12 +84,18 @@ class AuthService {
       
       if (!user) {
         console.log(`User not found with email: ${email}`);
-        throw new APIError(404, 'User not found');
+        const error = new APIError(404, 'User not found');
+        error.errorCode = 'USER_NOT_FOUND';
+        error.errorType = 'not_found_error';
+        throw error;
       }
 
       if (user.isVerified) {
         console.log(`Email already verified for user: ${email}`);
-        throw new APIError(400, 'Email is already verified');
+        const error = new APIError(400, 'Email is already verified');
+        error.errorCode = 'EMAIL_ALREADY_VERIFIED';
+        error.errorType = 'verification_error';
+        throw error;
       }
 
       // Generate new verification token
@@ -116,7 +125,10 @@ class AuthService {
       
       if (!result.success) {
         console.error(`Failed to send verification email: ${result.error}`);
-        throw new APIError(500, 'Failed to send verification email. Please try again later.');
+        const error = new APIError(500, 'Failed to send verification email. Please try again later.');
+        error.errorCode = 'EMAIL_SEND_FAILED';
+        error.errorType = 'email_error';
+        throw error;
       }
 
       return { 
@@ -232,7 +244,10 @@ class AuthService {
     const user = await userRepo.getByEmail(email);
     if (!user) {
       console.log(`[LOGIN] User not found: ${email}`);
-      throw new APIError(400, "Email does not exist");
+      const error = new APIError(401, "Invalid email or password");
+      error.errorCode = "INVALID_CREDENTIALS";
+      error.errorType = "authentication_error";
+      throw error;
     }
 
     console.log(`[LOGIN] User found - ID: ${user._id}, Has password: ${!!user.password}`);
@@ -240,7 +255,10 @@ class AuthService {
     // Check if password field exists
     if (!user.password) {
       console.log(`[LOGIN] No password field found for user: ${email}`);
-      throw new APIError(400, "Email or password is incorrect");
+      const error = new APIError(401, "Invalid email or password");
+      error.errorCode = "INVALID_CREDENTIALS";
+      error.errorType = "authentication_error";
+      throw error;
     }
 
     // Check password
@@ -250,19 +268,19 @@ class AuthService {
     console.log(`[LOGIN] Password match result: ${isPasswordMatch} for user: ${email}`);
     
     if (!isPasswordMatch) {
-      throw new APIError(400, "Email or password is incorrect");
-    }
-
-    // Verify account is active
-    if (!user.isActive) {
-      console.log(`[LOGIN] Account inactive for user: ${email}`);
-      throw new APIError(400, "Your account has been blocked");
+      const error = new APIError(401, "Invalid email or password");
+      error.errorCode = "INVALID_CREDENTIALS";
+      error.errorType = "authentication_error";
+      throw error;
     }
 
     // Verify account is verified
     if (!user.isVerified) {
       console.log(`[LOGIN] Account not verified for user: ${email}`);
-      throw new APIError(400, "Your account has not been verified. Please check your email and verify your account before logging in.");
+      const error = new APIError(403, "Your account has not been verified. Please check your email and verify your account before logging in.");
+      error.errorCode = "ACCOUNT_NOT_VERIFIED";
+      error.errorType = "verification_error";
+      throw error;
     }
 
     console.log(`[LOGIN] Login successful for: ${email}`);

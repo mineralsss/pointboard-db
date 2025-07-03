@@ -374,6 +374,9 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
       itemsLength: items?.length || 0
     });
     
+    // Import the generateOrderNumber function from order controller
+    const { generateOrderNumber } = require('./controllers/order.controller');
+    
     // Validate required fields
     if (!orderRef) {
       return res.status(400).json({
@@ -382,10 +385,16 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
       });
     }
     
-    if (!orderRef.match(/^POINTBOARD[A-Z][0-9]{6}$/i)) {
-      return res.status(400).json({
+    // Generate a new unique order number instead of using orderRef
+    let orderNumber;
+    try {
+      orderNumber = await generateOrderNumber();
+      console.log('🎯 [CREATE FROM REF] Generated new order number:', orderNumber);
+    } catch (error) {
+      console.error('❌ [CREATE FROM REF] Failed to generate order number:', error);
+      return res.status(500).json({
         success: false,
-        message: 'orderRef must be in format POINTBOARD[A-Z][0-9]{6}'
+        message: 'Failed to generate order number'
       });
     }
     
@@ -397,8 +406,8 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
       });
     }
     
-    // Check if order already exists
-    const existingOrder = await Order.findOne({ orderNumber: orderRef.toUpperCase() });
+    // Check if order already exists (using the generated order number)
+    const existingOrder = await Order.findOne({ orderNumber: orderNumber });
     if (existingOrder) {
       console.log('⚠️ [CREATE FROM REF] Order already exists:', existingOrder.orderNumber);
       return res.status(200).json({
@@ -432,15 +441,18 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
         orderStatus = 'pending';
     }
     
-    // Try to find related transaction
+    // Try to find related transaction (search by both orderRef and generated orderNumber)
     let transaction = null;
     let transactionId = null;
     let paymentDetails = null;
     
     try {
       transaction = await Transaction.findOne({ referenceCode: orderRef }) ||
+                   await Transaction.findOne({ referenceCode: orderNumber }) ||
                    await Transaction.findOne({ content: { $regex: orderRef, $options: 'i' } }) ||
-                   await Transaction.findOne({ description: { $regex: orderRef, $options: 'i' } });
+                   await Transaction.findOne({ content: { $regex: orderNumber, $options: 'i' } }) ||
+                   await Transaction.findOne({ description: { $regex: orderRef, $options: 'i' } }) ||
+                   await Transaction.findOne({ description: { $regex: orderNumber, $options: 'i' } });
       
       if (transaction) {
         transactionId = transaction._id;
@@ -464,7 +476,7 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
     
     // Prepare items
     const orderItems = items && items.length > 0 ? items : [{
-      productId: `${orderRef}-default`,
+      productId: `${orderNumber}-default`,
       productName: 'Product Order',
       quantity: 1,
       price: totalAmount
@@ -480,7 +492,7 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
     // Prepare order data
     const orderData = {
       user: req.user?.id || '000000000000000000000000', // Default user if not authenticated
-      orderNumber: orderRef.toUpperCase(),
+      orderNumber: orderNumber,
       items: orderItems,
       totalAmount: calculatedTotal,
       paymentMethod: paymentMethod || 'bank_transfer',
@@ -520,8 +532,11 @@ app.post('/api/orders/create-from-ref', async (req, res) => {
     
     return res.status(201).json({
       success: true,
-      data: order,
-      message: `Order created successfully with ${paymentStatus} payment status`
+      data: {
+        order: order,
+        paymentCode: orderNumber, // This is the code to show on payment
+        message: `Order created successfully with ${paymentStatus} payment status. Use order number ${orderNumber} for payment.`
+      }
     });
     
   } catch (error) {
@@ -547,6 +562,19 @@ app.get('/api/debug/recent-orders', async (req, res) => {
       console.log(`- ${order.orderNumber}: ${order.totalAmount} ₫ (${order.paymentStatus})`);
     });
     
+    // Check for potential issues with order numbers
+    const potentialIssues = recentOrders.filter(order => 
+      order.orderNumber.toLowerCase().includes('pointboard') && 
+      order.orderNumber !== order.orderNumber.toUpperCase()
+    );
+    
+    if (potentialIssues.length > 0) {
+      console.log('⚠️ [DEBUG] Potential mixed case issues found:');
+      potentialIssues.forEach(order => {
+        console.log(`  - ${order.orderNumber} (should be: ${order.orderNumber.toUpperCase()})`);
+      });
+    }
+    
     res.json({
       success: true,
       orders: recentOrders.map(order => ({
@@ -562,6 +590,160 @@ app.get('/api/debug/recent-orders', async (req, res) => {
     });
   } catch (error) {
     console.error('[DEBUG] Error fetching recent orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Comprehensive debug endpoint for order number tracking
+app.get('/api/debug/order-numbers', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG ORDER NUMBERS] Starting comprehensive analysis...');
+    
+    // Get recent orders
+    const recentOrders = await Order.find()
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('orderNumber createdAt totalAmount paymentStatus orderStatus');
+    
+    // Get recent transactions
+    const recentTransactions = await Transaction.find()
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('referenceCode content description createdAt transferAmount status');
+    
+    // Analyze order numbers
+    const orderAnalysis = recentOrders.map(order => ({
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      totalAmount: order.totalAmount,
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      format: /^POINTBOARD[A-Z][0-9]{6}$/.test(order.orderNumber) ? 'VALID' : 'INVALID',
+      case: order.orderNumber === order.orderNumber.toUpperCase() ? 'UPPERCASE' : 'MIXED_CASE',
+      length: order.orderNumber.length
+    }));
+    
+    // Analyze transactions
+    const transactionAnalysis = recentTransactions.map(transaction => {
+      const extractedOrderNumbers = [];
+      
+      // Extract from referenceCode
+      if (transaction.referenceCode) {
+        const refMatch = transaction.referenceCode.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (refMatch) {
+          extractedOrderNumbers.push({
+            source: 'referenceCode',
+            value: transaction.referenceCode,
+            extracted: `POINTBOARD${refMatch[1]}`,
+            normalized: `POINTBOARD${refMatch[1]}`.toUpperCase()
+          });
+        }
+      }
+      
+      // Extract from content
+      if (transaction.content) {
+        const contentMatch = transaction.content.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (contentMatch) {
+          extractedOrderNumbers.push({
+            source: 'content',
+            value: transaction.content,
+            extracted: `POINTBOARD${contentMatch[1]}`,
+            normalized: `POINTBOARD${contentMatch[1]}`.toUpperCase()
+          });
+        }
+      }
+      
+      // Extract from description
+      if (transaction.description) {
+        const descMatch = transaction.description.match(/POINTBOARD([A-Z][0-9]{6})/i);
+        if (descMatch) {
+          extractedOrderNumbers.push({
+            source: 'description',
+            value: transaction.description,
+            extracted: `POINTBOARD${descMatch[1]}`,
+            normalized: `POINTBOARD${descMatch[1]}`.toUpperCase()
+          });
+        }
+      }
+      
+      return {
+        transactionId: transaction._id,
+        createdAt: transaction.createdAt,
+        transferAmount: transaction.transferAmount,
+        status: transaction.status,
+        referenceCode: transaction.referenceCode,
+        content: transaction.content,
+        description: transaction.description,
+        extractedOrderNumbers: extractedOrderNumbers
+      };
+    });
+    
+    // Find mismatches
+    const mismatches = [];
+    
+    // Check for orders that don't match any transaction
+    orderAnalysis.forEach(order => {
+      const matchingTransactions = transactionAnalysis.filter(transaction => 
+        transaction.extractedOrderNumbers.some(extracted => 
+          extracted.normalized === order.orderNumber
+        )
+      );
+      
+      if (matchingTransactions.length === 0) {
+        mismatches.push({
+          type: 'ORDER_WITHOUT_TRANSACTION',
+          orderNumber: order.orderNumber,
+          order: order
+        });
+      }
+    });
+    
+    // Check for transactions that don't match any order
+    transactionAnalysis.forEach(transaction => {
+      transaction.extractedOrderNumbers.forEach(extracted => {
+        const matchingOrder = orderAnalysis.find(order => 
+          order.orderNumber === extracted.normalized
+        );
+        
+        if (!matchingOrder) {
+          mismatches.push({
+            type: 'TRANSACTION_WITHOUT_ORDER',
+            extractedOrderNumber: extracted.normalized,
+            originalValue: extracted.value,
+            source: extracted.source,
+            transaction: transaction
+          });
+        }
+      });
+    });
+    
+    console.log('🔍 [DEBUG ORDER NUMBERS] Analysis complete');
+    console.log(`  - Orders analyzed: ${orderAnalysis.length}`);
+    console.log(`  - Transactions analyzed: ${transactionAnalysis.length}`);
+    console.log(`  - Mismatches found: ${mismatches.length}`);
+    
+    res.json({
+      success: true,
+      analysis: {
+        orders: orderAnalysis,
+        transactions: transactionAnalysis,
+        mismatches: mismatches,
+        summary: {
+          totalOrders: orderAnalysis.length,
+          totalTransactions: transactionAnalysis.length,
+          totalMismatches: mismatches.length,
+          validOrderNumbers: orderAnalysis.filter(o => o.format === 'VALID').length,
+          uppercaseOrderNumbers: orderAnalysis.filter(o => o.case === 'UPPERCASE').length,
+          mixedCaseOrderNumbers: orderAnalysis.filter(o => o.case === 'MIXED_CASE').length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('[DEBUG ORDER NUMBERS] Error:', error);
     res.status(500).json({
       success: false,
       error: error.message

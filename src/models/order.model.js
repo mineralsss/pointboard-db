@@ -22,6 +22,18 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    subtotal: {
+      type: Number,
+      required: true,
+    },
+    vatAmount: {
+      type: Number,
+      default: 0,
+    },
+    vatRate: {
+      type: Number,
+      default: 0.10, // 10% VAT
+    },
     paymentMethod: {
       type: String,
       enum: ['bank_transfer', 'cash', 'card'],

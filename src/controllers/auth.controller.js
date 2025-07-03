@@ -88,35 +88,18 @@ class AuthController {
   });
 
   login = catchAsync(async (req, res) => {
-    try {
-      console.log('Login attempt for:', req.body.email);
-      
-      const result = await authService.loginWithEmail(req.body);
-      console.log('Login result:', result);
-      
-      // Make sure the response format matches frontend expectations
-      return OK(res, "Login successful", {
-        success: true,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        userData: result.userData
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      
-      if (error instanceof APIError) {
-        return res.status(error.statusCode || 400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      return res.status(500).json({
-        success: false,
-        errorType: 'server_error',
-        message: 'An unexpected error occurred. Please try again later.'
-      });
-    }
+    console.log('Login attempt for:', req.body.email);
+    
+    const result = await authService.loginWithEmail(req.body);
+    console.log('Login result:', result);
+    
+    // Make sure the response format matches frontend expectations
+    return OK(res, "Login successful", {
+      success: true,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      userData: result.userData
+    });
   });
 
   refreshTokens = catchAsync(async (req, res) => {
@@ -131,28 +114,21 @@ class AuthController {
   verifyEmail = catchAsync(async (req, res) => {
     const { token } = req.params;
     
-    try {
-      const user = await authService.verifyEmail(token);
-      
-      return OK(
-        res,
-        "Email verified successfully! You can now log in to your account.",
-        {
-          success: true,
-          user: {
-            id: user._id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName
-          }
+    const user = await authService.verifyEmail(token);
+    
+    return OK(
+      res,
+      "Email verified successfully! You can now log in to your account.",
+      {
+        success: true,
+        user: {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
         }
-      );
-    } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
+      }
+    );
   });
 
   // Resend verification email
@@ -162,24 +138,19 @@ class AuthController {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email is required"
+        message: "Email is required",
+        errorCode: "EMAIL_REQUIRED",
+        errorType: "validation_error"
       });
     }
     
-    try {
-      const result = await authService.resendVerificationEmail(email);
-      
-      return OK(
-        res,
-        result.message,
-        { success: true }
-      );
-    } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
+    const result = await authService.resendVerificationEmail(email);
+    
+    return OK(
+      res,
+      result.message,
+      { success: true }
+    );
   });
 
   requestPasswordReset = catchAsync(async (req, res) => {

@@ -12,8 +12,20 @@ router.post("/", auth(), validate(orderValidation.createOrder), orderController.
 // Get user's orders (authenticated users only)
 router.get("/my-orders", auth(), orderController.getUserOrders);
 
-// Get all orders (public)
-router.get("/all", orderController.getAllOrders);
+// Get all orders (admin only)
+router.get("/all", auth(RoleConfig.ADMIN), orderController.getAllOrders);
+
+// Get order statistics (admin only)
+router.get("/stats", auth(RoleConfig.ADMIN), orderController.getOrderStats);
+
+// Generate order number for payment code (authenticated users only)
+router.get("/generate-order-number", auth(), orderController.generateOrderNumberForPayment);
+
+// Debug endpoint to check order numbers (admin only)
+router.get("/debug-order-numbers", auth(RoleConfig.ADMIN), orderController.debugOrderNumbers);
+
+// Temporary debug endpoint without authentication (for testing)
+router.get("/debug-order-numbers-test", orderController.debugOrderNumbers);
 
 // Get order by ID (authenticated users only)
 router.get("/:orderId", auth(), validate(orderValidation.getOrderById), orderController.getOrderById);
