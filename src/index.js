@@ -193,24 +193,18 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
     const { transactionId } = req.params;
     console.log(`[VERIFY] Checking transaction: ${transactionId}`);
 
-    // Try direct match with referenceCode
-    let transaction = await Transaction.findOne({ referenceCode: transactionId });
+    // Find ALL matching transactions to prioritize real ones over stubs
+    const matchingTransactions = await Transaction.find({
+      $or: [
+        { referenceCode: transactionId },
+        { description: { $regex: transactionId, $options: 'i' } },
+        { content: { $regex: transactionId, $options: 'i' } }
+      ]
+    });
 
-    // If not found, try regex match in description (case-insensitive)
-    if (!transaction) {
-      transaction = await Transaction.findOne({
-        description: { $regex: transactionId, $options: 'i' }
-      });
-    }
+    console.log(`[VERIFY] Found ${matchingTransactions.length} matching transactions`);
 
-    // If not found, try regex match in content (case-insensitive)
-    if (!transaction) {
-      transaction = await Transaction.findOne({
-        content: { $regex: transactionId, $options: 'i' }
-      });
-    }
-
-    if (!transaction) {
+    if (matchingTransactions.length === 0) {
       console.log(`[VERIFY] No transaction found for: ${transactionId}`);
       
       // Check if transactionId matches POINTBOARD format
@@ -248,6 +242,21 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       });
     }
 
+    // Prioritize transactions: real transactions (with amount > 0) over stubs
+    let transaction = matchingTransactions.find(t => t.transferAmount > 0);
+    
+    // If no real transaction found, use the first one (likely a stub)
+    if (!transaction) {
+      transaction = matchingTransactions[0];
+    }
+
+    console.log(`[VERIFY] Selected transaction:`, {
+      id: transaction._id,
+      amount: transaction.transferAmount,
+      referenceCode: transaction.referenceCode,
+      description: transaction.description?.substring(0, 50) + '...'
+    });
+
     // Update the transaction status to 'received' if not already
     if (transaction.status !== 'received' && transaction.status !== 'completed' && transaction.status !== 'success') {
       transaction.status = 'received';
@@ -261,7 +270,7 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       transactionId: transaction.referenceCode,
       amount: transaction.transferAmount,
       description: transaction.content || transaction.description,
-      isStub: false
+      isStub: transaction.transferAmount === 0 && transaction.description?.includes('Pending payment')
     });
   } catch (error) {
     console.error('[VERIFY] Error:', error);
