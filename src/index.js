@@ -106,6 +106,13 @@ app.post("/api/transaction", async (req, res) => {
 
     await newTransaction.save();
 
+    // Automatically update order payment status if transaction matches any pending orders
+    const updatedOrdersCount = await updateOrderPaymentStatus(newTransaction);
+    
+    if (updatedOrdersCount > 0) {
+      console.log(`💰 [TRANSACTION] Automatically updated ${updatedOrdersCount} orders to completed payment`);
+    }
+
     return res.status(200).json({
       success: true,
       message: "Transaction processed and saved successfully",
@@ -262,6 +269,13 @@ app.get('/api/transactions/verify/:transactionId', async (req, res) => {
       transaction.status = 'received';
       await transaction.save();
       console.log(`[VERIFY] Transaction ${transactionId} status updated to 'received'`);
+      
+      // Automatically update order payment status if transaction matches any pending orders
+      const updatedOrdersCount = await updateOrderPaymentStatus(transaction);
+      
+      if (updatedOrdersCount > 0) {
+        console.log(`💰 [VERIFY] Automatically updated ${updatedOrdersCount} orders to completed payment`);
+      }
     }
 
     return res.status(200).json({
@@ -314,7 +328,7 @@ app.patch('/api/transactions/:transactionId/complete', async (req, res) => {
       });
     }
     
-    // Update transaction only - DO NOT auto-create/update orders
+    // Update transaction
     transaction.status = 'completed';
     if (amount) transaction.transferAmount = amount;
     if (gateway) transaction.gateway = gateway;
@@ -323,7 +337,15 @@ app.patch('/api/transactions/:transactionId/complete', async (req, res) => {
     await transaction.save();
     
     console.log(`✅ [UPDATE TRANSACTION] Transaction ${transactionId} updated to completed`);
-    console.log('ℹ️  Note: Order NOT auto-updated. Use /api/orders/create-from-ref endpoint.');
+    
+    // Automatically update order payment status if transaction matches any pending orders
+    const updatedOrdersCount = await updateOrderPaymentStatus(transaction);
+    
+    if (updatedOrdersCount > 0) {
+      console.log(`💰 [UPDATE TRANSACTION] Automatically updated ${updatedOrdersCount} orders to completed payment`);
+    } else {
+      console.log('ℹ️ [UPDATE TRANSACTION] No pending orders found to update');
+    }
     
     return res.status(200).json({
       success: true,
@@ -1575,6 +1597,231 @@ app.get('/api/v1/test/option-b-sync', async (req, res) => {
   }
 });
 
+// Test endpoint to verify automatic order payment status update
+app.get('/api/v1/test/auto-payment-update', async (req, res) => {
+  try {
+    console.log('🧪 [TEST] Testing automatic order payment status update');
+    
+    // Get recent pending orders
+    const pendingOrders = await Order.find({ paymentStatus: 'pending' })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('orderNumber frontendOrderRef totalAmount paymentStatus orderStatus createdAt');
+    
+    // Get recent completed transactions
+    const completedTransactions = await Transaction.find({
+      status: { $in: ['completed', 'success', 'received'] },
+      transferAmount: { $gt: 0 }
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('referenceCode content description transferAmount status createdAt');
+    
+    console.log(`🧪 [TEST] Found ${pendingOrders.length} pending orders and ${completedTransactions.length} completed transactions`);
+    
+    // Test the update function with each transaction
+    const testResults = [];
+    for (const transaction of completedTransactions) {
+      const updatedCount = await updateOrderPaymentStatus(transaction);
+      testResults.push({
+        transactionId: transaction._id,
+        referenceCode: transaction.referenceCode,
+        amount: transaction.transferAmount,
+        ordersUpdated: updatedCount
+      });
+    }
+    
+    const totalUpdated = testResults.reduce((sum, result) => sum + result.ordersUpdated, 0);
+    
+    console.log(`🧪 [TEST] Test completed. Total orders updated: ${totalUpdated}`);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Automatic payment status update test completed',
+      data: {
+        pendingOrders: pendingOrders.map(order => ({
+          orderNumber: order.orderNumber,
+          frontendOrderRef: order.frontendOrderRef,
+          totalAmount: order.totalAmount,
+          paymentStatus: order.paymentStatus,
+          orderStatus: order.orderStatus,
+          createdAt: order.createdAt
+        })),
+        completedTransactions: completedTransactions.map(transaction => ({
+          transactionId: transaction._id,
+          referenceCode: transaction.referenceCode,
+          content: transaction.content?.substring(0, 50) + '...',
+          description: transaction.description?.substring(0, 50) + '...',
+          transferAmount: transaction.transferAmount,
+          status: transaction.status,
+          createdAt: transaction.createdAt
+        })),
+        testResults: testResults,
+        summary: {
+          totalPendingOrders: pendingOrders.length,
+          totalCompletedTransactions: completedTransactions.length,
+          totalOrdersUpdated: totalUpdated
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('[TEST] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during test',
+      error: error.message
+    });
+  }
+});
+
+// Manual endpoint to update order payment status for existing transactions
+app.post('/api/v1/orders/update-payment-status', async (req, res) => {
+  try {
+    console.log('🔄 [MANUAL UPDATE] Starting manual order payment status update');
+    
+    // Find all completed transactions
+    const completedTransactions = await Transaction.find({
+      status: { $in: ['completed', 'success', 'received'] },
+      transferAmount: { $gt: 0 }
+    }).sort({ createdAt: -1 });
+    
+    console.log(`🔄 [MANUAL UPDATE] Found ${completedTransactions.length} completed transactions`);
+    
+    let totalUpdated = 0;
+    const updateResults = [];
+    
+    for (const transaction of completedTransactions) {
+      const updatedCount = await updateOrderPaymentStatus(transaction);
+      if (updatedCount > 0) {
+        totalUpdated += updatedCount;
+        updateResults.push({
+          transactionId: transaction._id,
+          referenceCode: transaction.referenceCode,
+          amount: transaction.transferAmount,
+          updatedOrders: updatedCount
+        });
+      }
+    }
+    
+    console.log(`✅ [MANUAL UPDATE] Completed manual update. Total orders updated: ${totalUpdated}`);
+    
+    return res.status(200).json({
+      success: true,
+      message: `Manual payment status update completed`,
+      data: {
+        totalTransactionsProcessed: completedTransactions.length,
+        totalOrdersUpdated: totalUpdated,
+        updateResults: updateResults
+      }
+    });
+    
+  } catch (error) {
+    console.error('[MANUAL UPDATE] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during manual payment status update',
+      error: error.message
+    });
+  }
+});
+
+// Function to automatically update order payment status when transaction is received
+async function updateOrderPaymentStatus(transaction) {
+  try {
+    console.log('🔄 [AUTO UPDATE] Checking for orders to update with transaction:', {
+      referenceCode: transaction.referenceCode,
+      content: transaction.content?.substring(0, 50) + '...',
+      description: transaction.description?.substring(0, 50) + '...',
+      amount: transaction.transferAmount
+    });
+
+    // Find orders that match this transaction
+    const matchingOrders = await Order.find({
+      $or: [
+        { orderNumber: transaction.referenceCode },
+        { frontendOrderRef: transaction.referenceCode },
+        { orderNumber: { $regex: transaction.referenceCode, $options: 'i' } },
+        { frontendOrderRef: { $regex: transaction.referenceCode, $options: 'i' } }
+      ],
+      paymentStatus: 'pending' // Only update pending orders
+    });
+
+    // Also search in transaction content and description for order numbers
+    const orderNumberPattern = /POINTBOARD[A-Z][0-9]{6}/gi;
+    const contentMatches = transaction.content ? transaction.content.match(orderNumberPattern) : [];
+    const descriptionMatches = transaction.description ? transaction.description.match(orderNumberPattern) : [];
+    
+    const allOrderNumbers = [
+      transaction.referenceCode,
+      ...contentMatches,
+      ...descriptionMatches
+    ].filter(Boolean);
+
+    // Find orders by extracted order numbers
+    for (const orderNumber of allOrderNumbers) {
+      const ordersByNumber = await Order.find({
+        $or: [
+          { orderNumber: orderNumber },
+          { orderNumber: orderNumber.toUpperCase() },
+          { frontendOrderRef: orderNumber },
+          { frontendOrderRef: orderNumber.toUpperCase() }
+        ],
+        paymentStatus: 'pending'
+      });
+      matchingOrders.push(...ordersByNumber);
+    }
+
+    // Remove duplicates
+    const uniqueOrders = matchingOrders.filter((order, index, self) => 
+      index === self.findIndex(o => o._id.toString() === order._id.toString())
+    );
+
+    console.log(`🔄 [AUTO UPDATE] Found ${uniqueOrders.length} pending orders to update`);
+
+    let updatedCount = 0;
+    for (const order of uniqueOrders) {
+      // Verify transaction amount matches order amount (with tolerance)
+      const amountTolerance = 1000; // 1000 VND tolerance
+      const amountDifference = Math.abs(transaction.transferAmount - order.totalAmount);
+      
+      if (amountDifference <= amountTolerance) {
+        // Update order payment status
+        order.paymentStatus = 'completed';
+        order.orderStatus = 'confirmed';
+        order.transactionId = transaction._id;
+        order.paymentDetails = {
+          gateway: transaction.gateway,
+          transactionDate: transaction.transactionDate,
+          transferAmount: transaction.transferAmount,
+          referenceCode: transaction.referenceCode,
+          accountNumber: transaction.accountNumber,
+        };
+        
+        await order.save();
+        updatedCount++;
+        
+        console.log(`✅ [AUTO UPDATE] Order ${order.orderNumber} updated to completed payment`);
+        console.log(`   - Order amount: ${order.totalAmount} VND`);
+        console.log(`   - Transaction amount: ${transaction.transferAmount} VND`);
+        console.log(`   - Difference: ${amountDifference} VND`);
+      } else {
+        console.log(`⚠️ [AUTO UPDATE] Amount mismatch for order ${order.orderNumber}:`);
+        console.log(`   - Order amount: ${order.totalAmount} VND`);
+        console.log(`   - Transaction amount: ${transaction.transferAmount} VND`);
+        console.log(`   - Difference: ${amountDifference} VND (tolerance: ${amountTolerance} VND)`);
+      }
+    }
+
+    console.log(`✅ [AUTO UPDATE] Successfully updated ${updatedCount} orders`);
+    return updatedCount;
+    
+  } catch (error) {
+    console.error('❌ [AUTO UPDATE] Error updating order payment status:', error);
+    return 0;
+  }
+}
+
 // Error handling middleware
 app.use(errorConverter);
 app.use(errorHandler);
@@ -1659,6 +1906,13 @@ function setupWebhookServer() {
           ref: transaction.referenceCode,
           description: transaction.description // Log to confirm it's saved
         });
+
+        // Automatically update order payment status if transaction matches any pending orders
+        const updatedOrdersCount = await updateOrderPaymentStatus(transaction);
+        
+        if (updatedOrdersCount > 0) {
+          console.log(`💰 [WEBHOOK] Automatically updated ${updatedOrdersCount} orders to completed payment`);
+        }
         
         // Respond with success
         res.writeHead(200, { "Content-Type": "application/json" });
