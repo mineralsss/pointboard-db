@@ -12,6 +12,11 @@ const orderSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    frontendOrderRef: {
+      type: String,
+      required: false, // Optional field for tracking frontend references
+      index: true, // Add index for faster queries
+    },
     items: [{
       productId: String,
       productName: String,

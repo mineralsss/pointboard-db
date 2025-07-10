@@ -45,6 +45,25 @@ const generateOrderNumber = async () => {
 };
 
 /**
+ * Validate and normalize order number format
+ */
+const validateOrderNumber = (orderNumber) => {
+  if (!orderNumber) return false;
+  
+  // Check if it matches the expected format: POINTBOARD[A-Z][0-9]{6}
+  const formatRegex = /^POINTBOARD[A-Z][0-9]{6}$/;
+  return formatRegex.test(orderNumber.toUpperCase());
+};
+
+/**
+ * Normalize order number to uppercase format
+ */
+const normalizeOrderNumber = (orderNumber) => {
+  if (!orderNumber) return null;
+  return orderNumber.toUpperCase();
+};
+
+/**
  * Create a new order with generated order number
  */
 const createOrder = catchAsync(async (req, res) => {
@@ -56,6 +75,7 @@ const createOrder = catchAsync(async (req, res) => {
       shippingAddress,
       notes,
       customerInfo,
+      orderRef, // Accept frontend order reference
       useCalculatedTotal = false, // New parameter to use calculated total instead of provided total
       includeVAT = true, // New parameter to include VAT in calculations
       vatRate = 0.10 // VAT rate (10% = 0.10)
@@ -64,6 +84,7 @@ const createOrder = catchAsync(async (req, res) => {
     console.log('📦 [CREATE ORDER] Creating order with data:', {
       totalAmount,
       paymentMethod,
+      orderRef, // Log frontend reference
       hasItems: !!items,
       itemsLength: items?.length || 0
     });
@@ -123,6 +144,7 @@ const createOrder = catchAsync(async (req, res) => {
     const orderData = {
       user: req.user.id,
       orderNumber: orderNumber,
+      frontendOrderRef: orderRef, // Store frontend reference for tracking
       items: items,
       totalAmount: finalTotal,
       subtotal: subtotal,
@@ -145,6 +167,7 @@ const createOrder = catchAsync(async (req, res) => {
     
     console.log('📦 [CREATE ORDER] Final order data:', {
       orderNumber: orderData.orderNumber,
+      frontendOrderRef: orderData.frontendOrderRef,
       totalAmount: orderData.totalAmount,
       subtotal: orderData.subtotal,
       vatAmount: orderData.vatAmount,
@@ -160,6 +183,7 @@ const createOrder = catchAsync(async (req, res) => {
     
     console.log('✅ [CREATE ORDER] Order created successfully:', {
       orderNumber: order.orderNumber,
+      frontendOrderRef: order.frontendOrderRef,
       totalAmount: order.totalAmount
     });
     
@@ -167,6 +191,8 @@ const createOrder = catchAsync(async (req, res) => {
       success: true,
       data: {
         order: order,
+        orderNumber: orderNumber, // Backend order number
+        orderRef: orderRef, // Frontend order reference
         paymentCode: orderNumber, // This is the code to show on payment
         message: `Order created successfully. Use order number ${orderNumber} for payment.`
       }
@@ -488,50 +514,90 @@ const getOrderStats = catchAsync(async (req, res) => {
 });
 
 /**
- * Debug endpoint to check all order numbers
+ * Debug endpoint to check order number consistency
  */
 const debugOrderNumbers = catchAsync(async (req, res) => {
   try {
-    const orders = await Order.find({})
-      .sort({ createdAt: -1 })
-      .select('orderNumber createdAt totalAmount paymentStatus orderStatus')
-      .limit(20);
+    console.log('🔍 [DEBUG ORDER NUMBERS] Starting analysis...');
     
-    console.log('🔍 [DEBUG] Recent order numbers:');
-    orders.forEach(order => {
-      console.log(`- ${order.orderNumber} (${order.createdAt.toISOString()}) - ${order.totalAmount} - ${order.paymentStatus}`);
+    // Get recent orders
+    const recentOrders = await Order.find()
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('orderNumber frontendOrderRef createdAt totalAmount paymentStatus orderStatus');
+    
+    // Analyze order numbers
+    const orderAnalysis = recentOrders.map(order => ({
+      orderNumber: order.orderNumber,
+      frontendOrderRef: order.frontendOrderRef,
+      createdAt: order.createdAt,
+      totalAmount: order.totalAmount,
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      format: validateOrderNumber(order.orderNumber) ? 'VALID' : 'INVALID',
+      case: order.orderNumber === order.orderNumber.toUpperCase() ? 'UPPERCASE' : 'MIXED_CASE',
+      length: order.orderNumber.length,
+      hasFrontendRef: !!order.frontendOrderRef
+    }));
+    
+    // Find potential issues
+    const issues = [];
+    
+    // Check for invalid formats
+    const invalidFormats = orderAnalysis.filter(o => o.format === 'INVALID');
+    if (invalidFormats.length > 0) {
+      issues.push({
+        type: 'INVALID_FORMAT',
+        count: invalidFormats.length,
+        orders: invalidFormats
+      });
+    }
+    
+    // Check for mixed case
+    const mixedCase = orderAnalysis.filter(o => o.case === 'MIXED_CASE');
+    if (mixedCase.length > 0) {
+      issues.push({
+        type: 'MIXED_CASE',
+        count: mixedCase.length,
+        orders: mixedCase
+      });
+    }
+    
+    // Check for missing frontend refs
+    const missingFrontendRefs = orderAnalysis.filter(o => !o.hasFrontendRef);
+    if (missingFrontendRefs.length > 0) {
+      issues.push({
+        type: 'MISSING_FRONTEND_REF',
+        count: missingFrontendRefs.length,
+        orders: missingFrontendRefs
+      });
+    }
+    
+    console.log('🔍 [DEBUG ORDER NUMBERS] Analysis complete');
+    console.log(`  - Orders analyzed: ${orderAnalysis.length}`);
+    console.log(`  - Issues found: ${issues.length}`);
+    
+    res.json({
+      success: true,
+      analysis: {
+        orders: orderAnalysis,
+        issues: issues,
+        summary: {
+          totalOrders: orderAnalysis.length,
+          validFormats: orderAnalysis.filter(o => o.format === 'VALID').length,
+          uppercaseOnly: orderAnalysis.filter(o => o.case === 'UPPERCASE').length,
+          withFrontendRef: orderAnalysis.filter(o => o.hasFrontendRef).length,
+          totalIssues: issues.reduce((sum, issue) => sum + issue.count, 0)
+        }
+      }
     });
     
-      res.status(200).json({
-    success: true,
-    data: {
-      totalOrders: orders.length,
-      orders: orders.map(order => ({
-        orderNumber: order.orderNumber,
-        createdAt: order.createdAt,
-        totalAmount: order.totalAmount,
-        paymentStatus: order.paymentStatus,
-        orderStatus: order.orderStatus
-      })),
-      // Check for potential duplicates or similar order numbers
-      potentialIssues: orders.filter(order => 
-        order.orderNumber.toLowerCase().includes('pointboard') && 
-        order.orderNumber !== order.orderNumber.toUpperCase()
-      ).map(order => ({
-        orderNumber: order.orderNumber,
-        issue: 'Mixed case detected'
-      })),
-      // Search for specific order number
-      searchResults: {
-        pointBoardA112094: await Order.findOne({ 
-          orderNumber: { $regex: /pointboarda112094/i } 
-        }).select('orderNumber createdAt totalAmount')
-      }
-    }
-  });
   } catch (error) {
     console.error('[DEBUG ORDER NUMBERS] Error:', error);
-    throw new APIError(500, 'Failed to fetch order numbers');
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 
@@ -568,4 +634,6 @@ module.exports = {
   generateOrderNumberForPayment,
   debugOrderNumbers,
   generateOrderNumber,
+  validateOrderNumber,
+  normalizeOrderNumber,
 }; 

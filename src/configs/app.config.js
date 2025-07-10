@@ -15,7 +15,7 @@ module.exports = {
   },
 
   JWT: {
-    secretKey: process.env.JWT_SECRET_KEY,
+    secretKey: process.env.JWT_SECRET_KEY || "your-secret-key",
     accessTokenLife: '1d', // 1 day
     refreshTokenLife: '7d', // 7 days
   },

@@ -6,16 +6,16 @@ const { sendWelcomeEmail } = require('../utils/emailService');
 // Generate tokens
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { id: user._id, email: user.email, role: user.role },
-    process.env.JWT_SECRET_KEY,
+    { sub: user._id, userID: user._id, email: user.email, role: user.role },
+    process.env.JWT_SECRET || "your-secret-key",
     { expiresIn: '1h' }
   );
 };
 
 const generateRefreshToken = (user) => {
   return jwt.sign(
-    { id: user._id },
-    process.env.JWT_SECRET_KEY,
+    { sub: user._id, userID: user._id },
+    process.env.JWT_SECRET || "your-secret-key",
     { expiresIn: '7d' }
   );
 };
