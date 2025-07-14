@@ -27,6 +27,212 @@ mongoose
   .then(() => console.log("Connected to MongoDB"))
   .catch((error) => console.error("MongoDB connection error:", error));
 
+// Function to automatically delete pending orders after configured hours
+async function deleteExpiredPendingOrders() {
+  try {
+    console.log('🕐 [AUTO DELETE] Starting cleanup of expired pending orders...');
+    
+    // Check if auto-delete is enabled
+    if (!AUTO_DELETE_CONFIG.ENABLED) {
+      console.log('🕐 [AUTO DELETE] Auto-delete is DISABLED');
+      return {
+        deletedCount: 0,
+        message: 'Auto-delete is disabled',
+        disabled: true
+      };
+    }
+    
+    // Calculate the cutoff time based on configuration
+    const cutoffTime = new Date();
+    cutoffTime.setHours(cutoffTime.getHours() - AUTO_DELETE_CONFIG.ORDER_EXPIRATION_HOURS);
+    
+    // Build query with safety filters
+    const query = {
+      paymentStatus: 'pending',
+      orderStatus: 'pending',
+      createdAt: { $lt: cutoffTime }
+    };
+    
+    // Add minimum amount threshold if configured
+    if (AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD > 0) {
+      query.totalAmount = { $gte: AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD };
+    }
+    
+    // Find expired pending orders with limit for safety
+    const expiredOrders = await Order.find(query)
+      .limit(AUTO_DELETE_CONFIG.MAX_BATCH_SIZE)
+      .sort({ createdAt: 1 }); // Oldest first
+    
+    console.log(`🕐 [AUTO DELETE] Found ${expiredOrders.length} expired pending orders (max: ${AUTO_DELETE_CONFIG.MAX_BATCH_SIZE})`);
+    
+    if (expiredOrders.length === 0) {
+      console.log('🕐 [AUTO DELETE] No expired pending orders to delete');
+      return {
+        deletedCount: 0,
+        message: 'No expired pending orders found',
+        cutoffTime: cutoffTime,
+        config: {
+          expirationHours: AUTO_DELETE_CONFIG.ORDER_EXPIRATION_HOURS,
+          dryRun: AUTO_DELETE_CONFIG.DRY_RUN,
+          maxBatchSize: AUTO_DELETE_CONFIG.MAX_BATCH_SIZE
+        }
+      };
+    }
+    
+    // Log the orders that would be deleted
+    expiredOrders.forEach(order => {
+      const ageInHours = (new Date() - order.createdAt) / (1000 * 60 * 60);
+      console.log(`🗑️ [AUTO DELETE] ${AUTO_DELETE_CONFIG.DRY_RUN ? 'WOULD DELETE' : 'Will delete'}: ${order.orderNumber} (age: ${Math.round(ageInHours * 100) / 100}h, amount: ${order.totalAmount} VND)`);
+    });
+    
+    // If in dry run mode, don't actually delete
+    if (AUTO_DELETE_CONFIG.DRY_RUN) {
+      console.log('🕐 [AUTO DELETE] DRY RUN MODE - No orders were actually deleted');
+      return {
+        deletedCount: 0,
+        message: `Dry run completed - ${expiredOrders.length} orders would be deleted`,
+        cutoffTime: cutoffTime,
+        dryRun: true,
+        wouldDeleteCount: expiredOrders.length,
+        orders: expiredOrders.map(order => ({
+          orderNumber: order.orderNumber,
+          frontendOrderRef: order.frontendOrderRef,
+          totalAmount: order.totalAmount,
+          createdAt: order.createdAt,
+          ageInHours: (new Date() - order.createdAt) / (1000 * 60 * 60)
+        }))
+      };
+    }
+    
+    // Backup orders before deletion if enabled
+    let backupResult = null;
+    if (AUTO_DELETE_CONFIG.BACKUP_BEFORE_DELETE) {
+      backupResult = await backupOrdersBeforeDeletion(expiredOrders);
+    }
+    
+    // Delete the expired orders
+    const deleteResult = await Order.deleteMany({
+      _id: { $in: expiredOrders.map(order => order._id) }
+    });
+    
+    console.log(`✅ [AUTO DELETE] Successfully deleted ${deleteResult.deletedCount} expired pending orders`);
+    
+    return {
+      deletedCount: deleteResult.deletedCount,
+      message: `Successfully deleted ${deleteResult.deletedCount} expired pending orders`,
+      cutoffTime: cutoffTime,
+      backupResult: backupResult,
+      config: {
+        expirationHours: AUTO_DELETE_CONFIG.ORDER_EXPIRATION_HOURS,
+        dryRun: AUTO_DELETE_CONFIG.DRY_RUN,
+        maxBatchSize: AUTO_DELETE_CONFIG.MAX_BATCH_SIZE,
+        minAmountThreshold: AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD
+      }
+    };
+    
+  } catch (error) {
+    console.error('❌ [AUTO DELETE] Error deleting expired pending orders:', error);
+    return {
+      deletedCount: 0,
+      error: error.message,
+      message: 'Error occurred while deleting expired pending orders'
+    };
+  }
+}
+
+// Function to backup orders before deletion
+async function backupOrdersBeforeDeletion(orders) {
+  try {
+    console.log('💾 [BACKUP] Creating backup of orders before deletion...');
+    
+    // Create a backup collection if it doesn't exist
+    const backupCollection = mongoose.connection.collection('deleted_orders_backup');
+    
+    // Prepare backup documents with deletion metadata
+    const backupDocs = orders.map(order => ({
+      ...order.toObject(),
+      _deletedAt: new Date(),
+      _deletionReason: 'auto_delete_expired_pending',
+      _originalId: order._id
+    }));
+    
+    // Insert backup documents
+    const backupResult = await backupCollection.insertMany(backupDocs);
+    
+    console.log(`💾 [BACKUP] Successfully backed up ${backupResult.insertedCount} orders`);
+    
+    return {
+      success: true,
+      backedUpCount: backupResult.insertedCount,
+      backupCollection: 'deleted_orders_backup'
+    };
+    
+  } catch (error) {
+    console.error('❌ [BACKUP] Error backing up orders:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Configuration for auto-delete functionality
+const AUTO_DELETE_CONFIG = {
+  // Cleanup interval in milliseconds (default: 1 hour)
+  CLEANUP_INTERVAL: parseInt(process.env.AUTO_DELETE_INTERVAL) || 60 * 60 * 1000,
+  
+  // Order expiration time in hours (default: 12 hours)
+  ORDER_EXPIRATION_HOURS: parseInt(process.env.ORDER_EXPIRATION_HOURS) || 12,
+  
+  // Maximum orders to delete in one batch (safety limit)
+  MAX_BATCH_SIZE: parseInt(process.env.AUTO_DELETE_MAX_BATCH) || 100,
+  
+  // Enable/disable auto-delete functionality
+  ENABLED: process.env.AUTO_DELETE_ENABLED !== 'false', // Default: true
+  
+  // Dry run mode (logs what would be deleted without actually deleting)
+  DRY_RUN: process.env.AUTO_DELETE_DRY_RUN === 'true', // Default: false
+  
+  // Minimum amount threshold (orders below this amount won't be auto-deleted)
+  MIN_AMOUNT_THRESHOLD: parseInt(process.env.AUTO_DELETE_MIN_AMOUNT) || 0,
+  
+  // Backup orders before deletion (save to separate collection)
+  BACKUP_BEFORE_DELETE: process.env.AUTO_DELETE_BACKUP === 'true', // Default: false
+};
+
+// Function to set up the scheduled task for deleting expired pending orders
+function setupAutoDeleteScheduler() {
+  // Check if auto-delete is enabled
+  if (!AUTO_DELETE_CONFIG.ENABLED) {
+    console.log('⏰ [SCHEDULER] Auto-delete scheduler is DISABLED');
+    return;
+  }
+  
+  const intervalHours = AUTO_DELETE_CONFIG.CLEANUP_INTERVAL / (60 * 60 * 1000);
+  const expirationHours = AUTO_DELETE_CONFIG.ORDER_EXPIRATION_HOURS;
+  
+  console.log('⏰ [SCHEDULER] Setting up auto-delete scheduler for pending orders');
+  console.log(`⏰ [SCHEDULER] Configuration:`);
+  console.log(`   - Cleanup interval: ${intervalHours} hour(s)`);
+  console.log(`   - Order expiration: ${expirationHours} hour(s)`);
+  console.log(`   - Max batch size: ${AUTO_DELETE_CONFIG.MAX_BATCH_SIZE}`);
+  console.log(`   - Dry run mode: ${AUTO_DELETE_CONFIG.DRY_RUN ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`   - Backup before delete: ${AUTO_DELETE_CONFIG.BACKUP_BEFORE_DELETE ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`   - Min amount threshold: ${AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD} VND`);
+  
+  // Run immediately on startup
+  deleteExpiredPendingOrders();
+  
+  // Set up periodic execution
+  setInterval(async () => {
+    console.log('⏰ [SCHEDULER] Running scheduled cleanup...');
+    const result = await deleteExpiredPendingOrders();
+    console.log('⏰ [SCHEDULER] Cleanup completed:', result);
+  }, AUTO_DELETE_CONFIG.CLEANUP_INTERVAL);
+  
+  console.log('✅ [SCHEDULER] Auto-delete scheduler started successfully');
+}
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -1726,6 +1932,218 @@ app.post('/api/v1/orders/update-payment-status', async (req, res) => {
   }
 });
 
+// Manual endpoint to trigger cleanup of expired pending orders
+app.post('/api/v1/orders/cleanup-expired', async (req, res) => {
+  try {
+    console.log('🧹 [MANUAL CLEANUP] Manual cleanup of expired pending orders requested');
+    
+    const result = await deleteExpiredPendingOrders();
+    
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        deletedCount: result.deletedCount,
+        cutoffTime: result.cutoffTime,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('[MANUAL CLEANUP] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during manual cleanup',
+      error: error.message
+    });
+  }
+});
+
+// Get statistics about pending orders and their age
+app.get('/api/v1/orders/pending-stats', async (req, res) => {
+  try {
+    console.log('📊 [PENDING STATS] Fetching pending orders statistics');
+    
+    // Get all pending orders
+    const pendingOrders = await Order.find({
+      paymentStatus: 'pending',
+      orderStatus: 'pending'
+    }).sort({ createdAt: -1 });
+    
+    const now = new Date();
+    const expirationHours = AUTO_DELETE_CONFIG.ORDER_EXPIRATION_HOURS;
+    const expirationTime = new Date(now.getTime() - (expirationHours * 60 * 60 * 1000));
+    
+    // Categorize orders by age
+    const stats = {
+      total: pendingOrders.length,
+      categories: {
+        lessThan1Hour: 0,
+        oneTo6Hours: 0,
+        sixTo12Hours: 0,
+        moreThan12Hours: 0,
+        expired: 0
+      },
+      orders: [],
+      config: {
+        expirationHours: expirationHours,
+        autoDeleteEnabled: AUTO_DELETE_CONFIG.ENABLED,
+        dryRunMode: AUTO_DELETE_CONFIG.DRY_RUN,
+        maxBatchSize: AUTO_DELETE_CONFIG.MAX_BATCH_SIZE,
+        minAmountThreshold: AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD
+      }
+    };
+    
+    pendingOrders.forEach(order => {
+      const ageInHours = (now - order.createdAt) / (1000 * 60 * 60);
+      const isExpired = order.createdAt < expirationTime;
+      
+      if (ageInHours < 1) {
+        stats.categories.lessThan1Hour++;
+      } else if (ageInHours < 6) {
+        stats.categories.oneTo6Hours++;
+      } else if (ageInHours < 12) {
+        stats.categories.sixTo12Hours++;
+      } else if (ageInHours < expirationHours) {
+        stats.categories.moreThan12Hours++;
+      } else {
+        stats.categories.expired++;
+      }
+      
+      stats.orders.push({
+        orderNumber: order.orderNumber,
+        frontendOrderRef: order.frontendOrderRef,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        ageInHours: Math.round(ageInHours * 100) / 100,
+        willBeDeleted: isExpired,
+        meetsAmountThreshold: order.totalAmount >= AUTO_DELETE_CONFIG.MIN_AMOUNT_THRESHOLD
+      });
+    });
+    
+    console.log('📊 [PENDING STATS] Statistics calculated:', {
+      total: stats.total,
+      expired: stats.categories.expired,
+      config: stats.config
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: stats,
+      message: 'Pending orders statistics retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('[PENDING STATS] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching pending orders statistics',
+      error: error.message
+    });
+  }
+});
+
+// Get auto-delete configuration
+app.get('/api/v1/orders/auto-delete-config', async (req, res) => {
+  try {
+    console.log('⚙️ [CONFIG] Fetching auto-delete configuration');
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...AUTO_DELETE_CONFIG,
+        cleanupIntervalHours: AUTO_DELETE_CONFIG.CLEANUP_INTERVAL / (60 * 60 * 1000),
+        environmentVariables: {
+          AUTO_DELETE_INTERVAL: process.env.AUTO_DELETE_INTERVAL,
+          ORDER_EXPIRATION_HOURS: process.env.ORDER_EXPIRATION_HOURS,
+          AUTO_DELETE_MAX_BATCH: process.env.AUTO_DELETE_MAX_BATCH,
+          AUTO_DELETE_ENABLED: process.env.AUTO_DELETE_ENABLED,
+          AUTO_DELETE_DRY_RUN: process.env.AUTO_DELETE_DRY_RUN,
+          AUTO_DELETE_MIN_AMOUNT: process.env.AUTO_DELETE_MIN_AMOUNT,
+          AUTO_DELETE_BACKUP: process.env.AUTO_DELETE_BACKUP
+        }
+      },
+      message: 'Auto-delete configuration retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('[CONFIG] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching auto-delete configuration',
+      error: error.message
+    });
+  }
+});
+
+// Test auto-delete with dry run
+app.post('/api/v1/orders/test-auto-delete', async (req, res) => {
+  try {
+    console.log('🧪 [TEST] Testing auto-delete with dry run');
+    
+    // Temporarily enable dry run mode
+    const originalDryRun = AUTO_DELETE_CONFIG.DRY_RUN;
+    AUTO_DELETE_CONFIG.DRY_RUN = true;
+    
+    const result = await deleteExpiredPendingOrders();
+    
+    // Restore original dry run setting
+    AUTO_DELETE_CONFIG.DRY_RUN = originalDryRun;
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Auto-delete test completed (dry run)',
+      data: result
+    });
+    
+  } catch (error) {
+    console.error('[TEST] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during auto-delete test',
+      error: error.message
+    });
+  }
+});
+
+// Get backup orders (deleted orders that were backed up)
+app.get('/api/v1/orders/backup', async (req, res) => {
+  try {
+    console.log('💾 [BACKUP] Fetching backed up orders');
+    
+    const backupCollection = mongoose.connection.collection('deleted_orders_backup');
+    const backupOrders = await backupCollection.find({})
+      .sort({ _deletedAt: -1 })
+      .limit(100)
+      .toArray();
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalBackedUp: backupOrders.length,
+        orders: backupOrders.map(order => ({
+          orderNumber: order.orderNumber,
+          frontendOrderRef: order.frontendOrderRef,
+          totalAmount: order.totalAmount,
+          createdAt: order.createdAt,
+          deletedAt: order._deletedAt,
+          deletionReason: order._deletionReason,
+          originalId: order._originalId
+        }))
+      },
+      message: 'Backup orders retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('[BACKUP] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching backup orders',
+      error: error.message
+    });
+  }
+});
+
 // Function to automatically update order payment status when transaction is received
 async function updateOrderPaymentStatus(transaction) {
   try {
@@ -1952,6 +2370,9 @@ app.listen(PORT, () => {
 
 // Start the webhook server in the same process
 const webhookServer = setupWebhookServer();
+
+// Set up the auto-delete scheduler
+setupAutoDeleteScheduler();
 
 // Handle graceful shutdown for both servers
 process.on("SIGTERM", () => {
