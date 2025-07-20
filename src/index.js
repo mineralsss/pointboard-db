@@ -199,8 +199,11 @@ app.get('/api/analytics', async (req, res) => {
   }
 });
 
-// Add v1 API aliases for frontend compatibility
-app.get('/api/v1/allusers', async (req, res) => {
+// Admin endpoints for frontend compatibility
+const auth = require("./middlewares/auth.middleware");
+const roleConfig = require("./configs/role.config");
+
+app.get('/api/v1/allusers', auth(roleConfig.ADMIN), async (req, res) => {
   try {
     const users = await User.find({});
     res.status(200).json({ success: true, users });
@@ -210,9 +213,12 @@ app.get('/api/v1/allusers', async (req, res) => {
   }
 });
 
-app.get('/api/v1/reviews', async (req, res) => {
+app.get('/api/v1/reviews', auth(roleConfig.ADMIN), async (req, res) => {
   try {
-    const reviews = await Review.find({}).populate('user', 'firstName lastName email').populate('product', 'name').populate('order', 'orderNumber');
+    const reviews = await Review.find({})
+      .populate('user', 'firstName lastName email')
+      .populate('product', 'name')
+      .populate('order', 'orderNumber');
     res.status(200).json({ success: true, reviews });
   } catch (error) {
     console.error('Error fetching reviews:', error);
@@ -220,7 +226,7 @@ app.get('/api/v1/reviews', async (req, res) => {
   }
 });
 
-app.get('/api/v1/analytics', async (req, res) => {
+app.get('/api/v1/analytics', auth(roleConfig.ADMIN), async (req, res) => {
   try {
     // Get basic stats
     const totalUsers = await User.countDocuments({});
