@@ -36,14 +36,7 @@ async function testAnalytics() {
       });
       
       console.log('✅ Public analytics response:');
-      console.log(`   Status: ${publicResponse.status}`);
-      console.log(`   Total Users: ${publicResponse.data.analytics?.totalUsers || 'N/A'}`);
-      console.log(`   Total Orders: ${publicResponse.data.analytics?.totalOrders || 'N/A'}`);
-      console.log(`   Total Reviews: ${publicResponse.data.analytics?.totalReviews || 'N/A'}`);
-      console.log(`   Total Revenue: ${publicResponse.data.analytics?.totalRevenue || 'N/A'}`);
-      console.log(`   New Users (7 days): ${publicResponse.data.analytics?.newUsersLast7Days || 'N/A'}`);
-      console.log(`   Recent Orders: ${publicResponse.data.analytics?.recentOrders?.length || 0} orders\n`);
-      
+      console.log(JSON.stringify(publicResponse.data, null, 2));
     } catch (error) {
       console.log('❌ Public analytics failed:');
       console.log(`   Status: ${error.response?.status || 'Unknown'}`);
@@ -61,14 +54,7 @@ async function testAnalytics() {
       });
       
       console.log('✅ Admin analytics response:');
-      console.log(`   Status: ${adminResponse.status}`);
-      console.log(`   Total Users: ${adminResponse.data.analytics?.totalUsers || 'N/A'}`);
-      console.log(`   Total Orders: ${adminResponse.data.analytics?.totalOrders || 'N/A'}`);
-      console.log(`   Total Reviews: ${adminResponse.data.analytics?.totalReviews || 'N/A'}`);
-      console.log(`   Total Revenue: ${adminResponse.data.analytics?.totalRevenue || 'N/A'}`);
-      console.log(`   New Users (7 days): ${adminResponse.data.analytics?.newUsersLast7Days || 'N/A'}`);
-      console.log(`   Recent Orders: ${adminResponse.data.analytics?.recentOrders?.length || 0} orders\n`);
-      
+      console.log(JSON.stringify(adminResponse.data, null, 2));
     } catch (error) {
       console.log('❌ Admin analytics failed:');
       console.log(`   Status: ${error.response?.status || 'Unknown'}`);

@@ -10,6 +10,9 @@ const Order = require('./models/order.model');
 const User = require('./models/user.model');
 const Review = require('./models/review.model');
 
+const auth = require("./middlewares/auth.middleware");
+const roleConfig = require("./configs/role.config");
+
 const app = express();
 
 // Connect to MongoDB
@@ -142,13 +145,108 @@ app.get('/api/allusers', async (req, res) => {
 });
 
 // GET all reviews
-app.get('/api/reviews', async (req, res) => {
+app.get('/api/reviews', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, async (req, res) => {
   try {
-    const reviews = await Review.find({}).populate('user', 'firstName lastName email').populate('product', 'name').populate('order', 'orderNumber');
+    const filter = {};
+    if (req.query.product) {
+      filter.product = req.query.product;
+    }
+    
+    const reviews = await Review.find(filter)
+      .populate('user', 'firstName lastName email')
+      .populate('product', 'name')
+      .populate('order', 'orderNumber');
     res.status(200).json({ success: true, reviews });
   } catch (error) {
     console.error('Error fetching reviews:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// POST endpoint to create a new review
+app.post('/api/v1/reviews', auth(), async (req, res) => {
+  try {
+    const { productId, rating, comment, images = [] } = req.body;
+    const userId = req.user.id; // Get user ID from authenticated user
+
+    // Validate required fields
+    if (!productId || !rating || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID, rating, and comment are required'
+      });
+    }
+
+    // Validate rating (1-5)
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be between 1 and 5'
+      });
+    }
+
+    // Create new review
+    const newReview = new Review({
+      user: userId,
+      product: productId,
+      rating,
+      comment,
+      images,
+      isApproved: false // Default to false, admin can approve later
+    });
+
+    await newReview.save();
+
+    // Populate user and product info for response
+    await newReview.populate('user', 'firstName lastName email');
+    await newReview.populate('product', 'name');
+
+    res.status(201).json({
+      success: true,
+      message: 'Review created successfully',
+      review: newReview
+    });
+
+  } catch (error) {
+    console.error('Error creating review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// DELETE endpoint to delete a review
+app.delete('/api/v1/reviews/:reviewId', auth(roleConfig.ADMIN), async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    
+    // Find and delete the review
+    const deletedReview = await Review.findByIdAndDelete(reviewId);
+    
+    if (!deletedReview) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Review deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error deleting review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
   }
 });
 
@@ -203,9 +301,6 @@ app.get('/api/analytics', (req, res, next) => {
 });
 
 // Admin endpoints for frontend compatibility
-const auth = require("./middlewares/auth.middleware");
-const roleConfig = require("./configs/role.config");
-
 app.get('/api/v1/allusers', auth(roleConfig.ADMIN), async (req, res) => {
   try {
     const users = await User.find({});
@@ -216,9 +311,17 @@ app.get('/api/v1/allusers', auth(roleConfig.ADMIN), async (req, res) => {
   }
 });
 
-app.get('/api/v1/reviews', auth(roleConfig.ADMIN), async (req, res) => {
+app.get('/api/v1/reviews', auth(roleConfig.ADMIN), (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, async (req, res) => {
   try {
-    const reviews = await Review.find({})
+    const filter = {};
+    if (req.query.product) {
+      filter.product = req.query.product;
+    }
+    
+    const reviews = await Review.find(filter)
       .populate('user', 'firstName lastName email')
       .populate('product', 'name')
       .populate('order', 'orderNumber');
