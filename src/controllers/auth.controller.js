@@ -23,11 +23,16 @@ class AuthController {
         role: req.body.role || 'student' // Default to student role
       };
       
+      console.log('Calling auth service with userData:', JSON.stringify(userData, null, 2));
+      
       // Call the auth service to register user
       const result = await authService.register(userData);
       
+      console.log('Auth service result:', JSON.stringify(result, null, 2));
+      
       // Check for success
       if (!result.success) {
+        console.log('Registration failed:', result);
         return res.status(400).json(result);
       }
       
@@ -42,7 +47,12 @@ class AuthController {
       );
     } catch (error) {
       // Log detailed error info
-      console.error('Registration error:', error.message);
+      console.error('Registration error details:', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
       
       // Check for MongoDB duplicate key error
       if (error.code === 11000) {

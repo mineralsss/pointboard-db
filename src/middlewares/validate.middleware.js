@@ -12,6 +12,14 @@ const validate = (schema) => (req, res, next) => {
   const { value, error } = Joi.compile(schema).validate(validSchema);
 
   if (error) {
+    console.log("Validation error details:", {
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      errorDetails: error.details,
+      errorMessage: error.message
+    });
+    
     const errorMessage = error.details
       .map((details) => details.message)
       .join(", ");

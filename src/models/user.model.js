@@ -22,6 +22,7 @@ const userSchema = new Schema(
     phoneNumber: {
       type: String,
       unique: true,
+      sparse: true, // Allow multiple null/undefined values
       trim: true,
     },
     address: {
