@@ -153,7 +153,10 @@ app.get('/api/reviews', async (req, res) => {
 });
 
 // GET analytics data
-app.get('/api/analytics', async (req, res) => {
+app.get('/api/analytics', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, async (req, res) => {
   try {
     // Get basic stats
     const totalUsers = await User.countDocuments({});
@@ -226,7 +229,10 @@ app.get('/api/v1/reviews', auth(roleConfig.ADMIN), async (req, res) => {
   }
 });
 
-app.get('/api/v1/analytics', auth(roleConfig.ADMIN), async (req, res) => {
+app.get('/api/v1/analytics', auth(roleConfig.ADMIN), (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, async (req, res) => {
   try {
     // Get basic stats
     const totalUsers = await User.countDocuments({});
