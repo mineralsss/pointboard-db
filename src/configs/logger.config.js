@@ -3,7 +3,7 @@ const { ElasticsearchTransport } = require('winston-elasticsearch');
 
 const esTransportOpts = {
   level: 'info',
-  clientOpts: { node: 'http://localhost:9200' },
+  clientOpts: { node: 'http://0.0.0.0:9200' },
 };
 const esTransport = new ElasticsearchTransport(esTransportOpts);
 

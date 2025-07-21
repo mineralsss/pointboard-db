@@ -5,7 +5,7 @@ async function checkExistingUsers() {
   try {
     // Connect to MongoDB
     await mongoose.connect(
-      process.env.MONGODB_URI || "mongodb://localhost:27017/chotuananhne",
+      process.env.MONGODB_URI || "mongodb://0.0.0.0:27017/chotuananhne",
       {
         useNewUrlParser: true,
         useUnifiedTopology: true,

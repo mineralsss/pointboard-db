@@ -3,7 +3,7 @@ module.exports = {
   PORT: process.env.PORT || 3200,
   MongoDB_URL_DEV: process.env.MONGODB_URL_DEV,
   MongoDB_URL_MAIN: process.env.MONGODB_URL_MAIN,
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
+  CLIENT_URL: process.env.CLIENT_URL || 'http://0.0.0.0:5173',
   email: {
     name: 'hello',
     host: process.env.EMAIL_HOST ?? 'sandbox.smtp.mailtrap.io',
