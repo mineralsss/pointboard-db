@@ -27,6 +27,9 @@ router.get("/debug-order-numbers", auth(RoleConfig.ADMIN), orderController.debug
 // Temporary debug endpoint without authentication (for testing)
 router.get("/debug-order-numbers-test", orderController.debugOrderNumbers);
 
+// Update payment status for an order
+router.post('/update-payment-status', orderController.updatePaymentStatus);
+
 // Get order by ID (authenticated users only)
 router.get("/:orderId", auth(), validate(orderValidation.getOrderById), orderController.getOrderById);
 
