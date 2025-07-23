@@ -19,7 +19,10 @@ const MONGODB_URI = process.env.MONGODB_URI ||
         console.error("MONGODB_URI must be set in production!"); 
         process.exit(1); 
       })()
-    : "mongodb://localhost:27017/chotuananhne"
+    : (() => {
+        console.error("MONGODB_URI must be set!");
+        process.exit(1);
+      })()
   );
 
 console.log(`Connecting to MongoDB: ${MONGODB_URI.replace(/\/\/.*@/, '//***:***@')}`); // Hide credentials in logs

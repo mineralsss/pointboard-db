@@ -7,6 +7,7 @@ const orderRouter = require("./order.route");
 const productRouter = require("./product.route");
 const adminRouter = require("./admin.route");
 const reviewRouter = require("./review.route");
+const analyticsRouter = require("./analytics.route");
 
 const routes = [
   {
@@ -36,6 +37,10 @@ const routes = [
   {
     path: "/reviews",
     route: reviewRouter,
+  },
+  {
+    path: "/analytics",
+    route: analyticsRouter,
   },
 ];
 
