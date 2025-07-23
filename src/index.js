@@ -141,7 +141,7 @@ app.get('/api/allorders', async (req, res) => {
 });
 
 // GET all users
-app.get('api/allusers', async (req, res) => {
+app.get('/api/allusers', async (req, res) => {
   try {
     const users = await User.find({});
     res.status(200).json({ success: true, users });
