@@ -30,6 +30,9 @@ router.get("/debug-order-numbers-test", orderController.debugOrderNumbers);
 // Update payment status for an order
 router.post('/update-payment-status', orderController.updatePaymentStatus);
 
+// Update payment status for an order by orderId in params
+router.patch('/:orderId/payment-status', orderController.updatePaymentStatusById);
+
 // Get order by ID (authenticated users only)
 router.get("/:orderId", auth(), validate(orderValidation.getOrderById), orderController.getOrderById);
 

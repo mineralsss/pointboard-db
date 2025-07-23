@@ -652,6 +652,33 @@ const updatePaymentStatus = catchAsync(async (req, res) => {
   });
 });
 
+/**
+ * Update payment status for an order by orderId in params
+ */
+const updatePaymentStatusById = catchAsync(async (req, res) => {
+  const { orderId } = req.params;
+  const { paymentStatus } = req.body;
+  const validStatuses = ['pending', 'completed', 'failed', 'refunded'];
+
+  if (!paymentStatus || !validStatuses.includes(paymentStatus)) {
+    return res.status(400).json({ success: false, message: 'Invalid or missing paymentStatus' });
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  order.paymentStatus = paymentStatus;
+  await order.save();
+
+  return res.status(200).json({
+    success: true,
+    data: order,
+    message: 'Payment status updated successfully',
+  });
+});
+
 module.exports = {
   createOrder,
   getOrderById,
@@ -666,4 +693,5 @@ module.exports = {
   validateOrderNumber,
   normalizeOrderNumber,
   updatePaymentStatus,
+  updatePaymentStatusById,
 }; 
