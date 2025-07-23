@@ -8,6 +8,7 @@ const http = require("http");
 const Transaction = require('./models/transaction.model');
 const Order = require('./models/order.model');
 const User = require('./models/user.model');
+const userController = require('./controllers/user.controller');
 
 const app = express();
 
@@ -150,6 +151,9 @@ app.get('/api/allusers', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
+
+// Direct endpoint for /api/v1/allusers
+app.get('/api/v1/allusers', userController.getAllUsers);
 
 // Backend endpoint for checking transaction status
 app.get('/api/transactions/:transactionId/status', async (req, res) => {

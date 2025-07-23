@@ -44,4 +44,7 @@ router.patch(
 router.patch("/:id/status", userController.changeStatus);
 router.patch("/:id/balance", userController.updateBalance);
 
+// Public endpoint to get all users
+router.get('/allusers', userController.getAllUsers);
+
 module.exports = router;
